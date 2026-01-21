@@ -79,7 +79,55 @@ To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` 
 ```
 *Rationale:* A JSON file is easily generated/read by AI. The `$schema` key allows IDEs (and AI) to validate the config structure automatically.
 
-## 5. TDD Strategy (Strict Enforcement)
+## 5. Development Standards & Project Structure (Token Efficiency)
+
+**Goal:** Prevent "God Objects," minimize token usage for AI reads, and enforce strict "Class-like" encapsulation.
+
+### 5.1 Directory Structure (Strict Package Boundaries)
+Every folder is a self-contained package. No file shall exceed 200 lines if possible.
+
+```
+/cmd
+  /hydra            # Main entry point (Wiring only, < 50 lines)
+/internal
+  /config           # struct definitions, load logic
+  /transport        # stdio, connection handling
+  /sanitizer        # json/log filtering logic
+  /supervisor       # process management, signal handling
+  /statestore       # in-memory state tracking
+  /proxy            # router & message passing glue
+  /logger           # zerolog wrapper (configured for stderr)
+```
+
+### 5.2 The "Interface-First" Pattern (Class Mimicry)
+All components MUST follow this 3-step pattern. Concrete structs should be private/unexported where possible to force interface usage.
+
+```go
+// 1. Interface (The Contract) - public
+type Manager interface {
+    Start() error
+    Stop() error
+}
+
+// 2. Struct (The Class) - private
+type manager struct {
+    cmd *exec.Cmd
+}
+
+// 3. Constructor (The Factory) - public
+func NewManager() Manager {
+    return &manager{}
+}
+```
+
+### 5.3 Safety & IO Rules
+1.  **Banned Package:** `fmt` is BANNED for production code (except `fmt.Errorf`).
+    *   *Reason:* `fmt.Println` writes to stdout, which corrupts the JSON-RPC pipe.
+    *   *Alternative:* Use the `internal/logger` package which writes purely to `stderr`.
+2.  **Zombie Prevention:** All child processes must be spawned with `SysProcAttr` (Setpgid) to ensure they die when Hydra dies.
+3.  **No Global State:** No `var` globals. All dependencies must be injected via Constructors.
+
+## 6. TDD Strategy (Strict Enforcement)
 
 ### Phase 1: The Sanitizer (Pure Function)
 *   **Test:** Input raw mixed strings (JSON + logs). Assert only JSON comes out one pipe, logs out the other.
