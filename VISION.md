@@ -20,26 +20,39 @@ AI agents (Claude, Gemini, Codex) developing MCP servers lose session context wh
 
 ## Design Principles
 
-1. **Session Persistence:** Crashes are recoverable tool errors, not connection failures
-2. **AI-Readable Errors:** Error messages are structured JSON-RPC responses the AI can parse and fix
-3. **Transparent Proxy:** Normal operations pass through unchanged
-4. **No Infinite Loops:** Progressive backoff prevents AI death spirals
-5. **Atomic File Operations:** Only restart on complete file writes
+1. **Session Persistence:** Crashes are recoverable tool errors, not connection failures.
+2. **Sanitized Communication:** **CRITICAL:** Child stdout is strictly filtered. Only valid JSON-RPC is passed to the AI. Random `console.log` or stack traces are captured and wrapped as logs, preventing protocol corruption.
+3. **AI-Readable Errors:** Error messages are structured JSON-RPC responses the AI can parse and fix.
+4. **Optimistic Speed:** Restart immediately on changes; let the crash be the validator.
+5. **State Consistency:** Buffer and replay state-altering notifications (`didChange`) so the new server wakes up in sync.
 
 ## State Machine
 
 ### States
-- `HEALTHY`: Child server running, proxy mode active
-- `RESTARTING`: Child server spawning, requests queued/rejected
+- `HEALTHY`: Child server running, proxy mode active (with sanitization)
+- `RESTARTING`: Child server spawning, state notifications buffered
 - `CRASHED`: Child server dead, sending error responses
 
 ### Transitions
 
 ```
-HEALTHY → file change → validate syntax → RESTARTING → spawn success → HEALTHY
+HEALTHY → file change → RESTARTING (Optimistic) → spawn success → replay state → HEALTHY
 HEALTHY → child crash → CRASHED → file change → RESTARTING
 RESTARTING → spawn failure → CRASHED
 ```
+
+## Stdio Sanitization (The "Pollution" Fix)
+
+**The Problem:** Dev servers are messy. A single `console.log("DB connected")` or raw panic stack trace breaks the JSON-RPC pipe, killing the AI session.
+
+**The Fix:**
+- **Stdout:** Hydra intercepts *every* line from the child.
+- **Filter:** If line is valid JSON-RPC → Forward to AI.
+- **Sanitize:** If line is raw text → Wrap in MCP `notifications/message` (log level: info/debug) and send to AI.
+- **Stderr:** Always captured and treated as logs/error context.
+
+**Result:** The AI connection is immune to "noisy" server code.
+
 
 ## Crash Loop Prevention
 
@@ -87,34 +100,15 @@ RESTARTING → spawn failure → CRASHED
 
 **No hard blocks.** AI can always iterate, but delays + context nudge away from loops.
 
-## Re-Initialization Strategy
-
-When child server restarts, it needs MCP initialization handshake (`initialize` → `initialized`).
-
-**Approach: Transparent Re-Init with Success Notification**
-
-1. Hydra caches original `initialize` request from AI
-2. On restart, Hydra replays initialization to new child process
-3. Child responds with capabilities
-4. Hydra sends success notification to AI:
-   ```json
-   {
-     "type": "text",
-     "text": "✓ Server restarted successfully. Tools: [list_files, search_code, run_command]"
-   }
-   ```
-
-**Rationale:** AI needs explicit success signals, not just silence. Tool list confirms available capabilities.
 
 ## File Integrity & Restart Triggers
 
-**Pre-Flight Validation:**
-- On file change, run syntax validation BEFORE restart
-  - Python: `python -m py_compile <file>` or `ast.parse()`
-  - Node: `node --check <file>` or `esbuild --check`
-  - Go: `go build -o /dev/null`
-- If validation fails → immediate error, skip restart
-- If validation passes → proceed with restart
+**Optimistic Restart Strategy:**
+- **Remove Pre-Flight Checks:** Do not run `go build` or syntax checks before restarting.
+- **Action:** On file save, kill the old process and spawn the new one immediately.
+- **Validation:** If the new process crashes instantly (exit code != 0 within < 500ms), capture `stderr`.
+- **Feedback:** Send the capture `stderr` as the "Build/Syntax Error" to the AI.
+- **Benefit:** Zero latency on save. The AI treats a "crash on start" identically to a "syntax error".
 
 **Atomic File Writes:**
 - Debounce fsnotify events (editors write multiple times)
@@ -126,45 +120,40 @@ When child server restarts, it needs MCP initialization handshake (`initialize` 
 - Accept 5-10s for heavy servers (Python ML libs, etc.)
 - No artificial delays - restart as fast as possible
 
-## Request Handling During Restart
+## Request Handling & State Consistency
 
-**Realistic Constraint:** Restarts can take 5-10s for Python servers with heavy dependencies.
+**1. State Replay (CRITICAL):**
+- **The Issue:** If we restart, the new server loses memory of `didOpen` files or `didChange` edits.
+- **The Fix:** Hydra acts as a "State Buffer".
+  - **Track:** Maintain a cache of the most recent `initialize` request and any `textDocument/didOpen` or `textDocument/didChange` notifications.
+  - **Replay:** On successful spawn, immediately replay these notifications to the new server *before* allowing other traffic.
+  - **Result:** The new server "wakes up" with the same file state as the old one.
 
-**Strategy: Fast Fail with Clear Error**
-
-When request arrives during `RESTARTING` state:
-- If restart in progress < 3s → queue request, wait for completion
-- If restart in progress > 3s → immediate error response:
+**2. Request Strategy: Fast Fail**
+- **Scenario:** Request arrives during `RESTARTING`.
+- **Action:** Return JSON-RPC Error `-32000` (Server Not Initialized) immediately.
   ```json
   {
-    "isError": true,
-    "content": [{
-      "type": "text",
-      "text": "Server is restarting. Retry in 2 seconds."
-    }]
+    "code": -32000,
+    "message": "Server is restarting. Please retry in 2 seconds.",
+    "data": { "retry_after": 2000 }
   }
   ```
+- **Rationale:** Don't buffer ID-based requests (complex to synchronize). Let the AI client handle the retry logic.
 
-**No complex buffering.** Fast feedback > silent waiting.
+## Re-Initialization & Capabilities
 
-## Transparent Proxy Behavior
-
-**During HEALTHY state:**
-- Parse incoming JSON-RPC to track state
-- Forward all bytes unchanged to child server
-- Forward all responses unchanged to AI
-- Zero modification, zero latency overhead
-
-**Operations that must work identically:**
-- `initialize` - forwarded
-- `tools/list` - forwarded
-- `tools/call` - forwarded
-- `resources/list` - forwarded
-- `resources/read` - forwarded
-- `prompts/list` - forwarded
-- Custom protocol extensions - forwarded
-
-**Only intercept during CRASHED/RESTARTING states.**
+**Transparent Re-Init:**
+1. Hydra replays cached `initialize` to the new child.
+2. Child responds with capabilities.
+3. **Capability Drift:** If the new server has different tools, Hydra sends a `notifications/capabilities_changed` (or equivalent) to prompt the AI to refresh its tool list.
+4. **Success Notification:**
+   ```json
+   {
+     "type": "text",
+     "text": "✓ Server restarted & State replayed. Tools: [list_files, ...]"
+   }
+   ```
 
 ## Traffic Inspection (Future Phase)
 
