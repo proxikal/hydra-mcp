@@ -1,196 +1,318 @@
-# Product Requirement Document (PRD): Hydra
+# Hydra PRD: Core Specification
 
-## 1. Executive Summary
-Hydra is a robust, fault-tolerant **Supervisor & Proxy** for Model Context Protocol (MCP) servers. It decouples the AI agent's session from the unstable development lifecycle of the backend server. It ensures that syntax errors, crashes, or panics in the child process never terminate the client connection, allowing for a continuous, "Self-Healing" development workflow.
+## Purpose
+Hydra is a fault-tolerant supervisor and proxy for MCP servers. It sits between AI clients and MCP servers, providing crash recovery, hot-reload, and session continuity via stdio interception. When the child server crashes or restarts, the AI client session remains alive.
 
-## 2. Technical Goals & Constraints
-- **Zero Friction:** Must work with any standard MCP client (Claude, Gemini, etc.) without client-side plugins.
-- **Performance:** < 50ms overhead on requests. < 500ms restart time on file changes.
-- **Safety:** Strict sanitization of `stdout` to prevent protocol corruption.
-- **Compatibility:** Agnostic to the child server's language (Go, Python, Node, etc.).
+---
 
-## 3. Technology Stack Recommendation
+## Architecture Decision: 1:1 Model
 
-### Core Language
-- **Go (Golang) 1.23+**: Chosen for concurrency primitives (channels, goroutines), static typing, and single-binary distribution.
+**One Hydra instance per MCP server** (not multiplexed).
 
-### Critical Libraries (The "No Wheel Re-Creation" List)
+**Rationale:**
+- MCP protocol assumes 1 stdio connection = 1 server
+- Tool namespacing breaks with multiplexing
+- Multiple lightweight instances (< 10MB each) is acceptable
 
-#### 1. JSON-RPC 2.0 Handling
-* **Candidate:** `github.com/sourcegraph/jsonrpc2`
-  * *Why:* Battle-tested in the LSP ecosystem (which MCP mirrors). Handles framing, concurrency, and error codes correctly.
-  * *Usage:* Use for parsing traffic to internal state tracking.
-* **Alternative (Lightweight):** `github.com/tidwall/gjson` + `github.com/tidwall/sjson`
-  * *Why:* Ultra-fast, schema-less parsing. Perfect for a **Proxy** that only needs to peek at `method` and `id` without fully unmarshalling potentially complex/unknown payloads.
-  * *Decision:* **`tidwall/gjson`** is preferred for the *Proxy* layer to avoid strict schema coupling and serialization overhead. We only need to *route* messages, not fully understand them (except for specific lifecycle events).
-
-#### 2. File Watching
-* **Library:** `github.com/fsnotify/fsnotify`
-  * *Why:* The industry standard for cross-platform file system notifications.
-  * *Wrapper:* `github.com/radovskyb/watcher` (optional, if recursive polling is needed, but fsnotify is usually sufficient for recursive with a walker).
-
-#### 3. CLI Interface
-* **Library:** `github.com/spf13/cobra`
-  * *Why:* Standard for Go CLIs. Auto-generates help, flags, and subcommands.
-
-#### 4. Testing & Mocking (Crucial for TDD)
-* **Framework:** `github.com/stretchr/testify` (assert, require, suite)
-  * *Why:* Replaces Go's verbose error checking with fluent assertions.
-* **Mocking:** `github.com/vektra/mockery`
-  * *Why:* Auto-generates mocks from interfaces. Essential for testing the `Supervisor` without actually spawning real OS processes every time.
-
-#### 6. Utilities
-* **Library:** `github.com/joho/godotenv`
-  * *Why:* Auto-load `.env` files. Essential because Hydra controls the child process environment.
-* **Library:** `github.com/sabhiram/go-gitignore`
-  * *Why:* Parse `.gitignore` files to prevent restart loops from log files or temp artifacts.
-* **Library:** `github.com/shirou/gopsutil` (or specific tree-kill logic)
-  * *Why:* Reliable Cross-Platform "Tree Kill" to ensure `npm` -> `node` chains are fully terminated.
-
-## 4. Architecture Specifications
-
-### 4.1 Component Diagram
-1.  **Transport Interface (`Transport`):** Abstract interface for `Read()` and `Write()`.
-    *   *Feature:* **Protocol Sniffer.** Auto-detects `Content-Length:` (LSP-style) vs `{\n` (NDJSON) headers.
-    *   *Feature:* **UTF-8 Validator.** Replaces invalid byte sequences with `?` to prevent crashes.
-2.  **Sanitizer:** A robust stream filter that classifies chunks as "Valid JSON-RPC" or "Pollution".
-3.  **Supervisor:** Manages the `os.Cmd` process. Handles signals (SIGINT/SIGTERM).
-    *   *Feature:* **Tree Kill.** Terminates entire process groups (Windows/Unix compatible).
-4.  **StateStore:** In-memory store (thread-safe) for `initialize` params and `didChange` history.
-5.  **TrafficRecorder:** Circular buffer (last 50 req/res) for debugging.
-6.  **ToolInjector:** Merges Hydra's meta-tools (`hydra_restart`, `hydra_logs`) with Child tools.
-7.  **Proxy:** The glue. Routes messages between Transport, StateStore, and Supervisor.
-    *   *Feature:* **Subscription Resurrection.** Caches `resources/subscribe` requests and replays them on restart.
-    *   *Feature:* **Broad Invalidation.** Sends `tools/list_changed`, `resources/list_changed`, and `prompts/list_changed` after every successful restart.
-
-### 4.2 Configuration Schema (`hydra.json`)
-To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` in the root.
-
-```json
-{
-  "$schema": "https://hydra.mcp.dev/schema.json",
-  "command": "python",
-  "args": ["server.py"],
-  "env_file": ".env",
-  "environment": {
-    "DEBUG": "true",
-    "API_KEY": "${ENV:API_KEY}"
-  },
-  "watch": {
-    "paths": ["./src", "./lib"],
-    "ignore_files": [".gitignore"],
-    "extensions": [".py", ".json"],
-    "ignore": ["**/__pycache__", "**/*.log"]
-  },
-  "behavior": {
-    "debounce_ms": 500,
-    "restart_delay_ms": 0,
-    "graceful_shutdown_ms": 2000,
-    "pre_restart_command": "find . -name '*.pyc' -delete",
-    "max_restarts": 10
-  }
-}
+**Topology:**
+```
+AI Client (Claude Desktop)
+  ├─ stdio → Hydra Instance #1 → Python MCP Server
+  ├─ stdio → Hydra Instance #2 → Node MCP Server
+  └─ stdio → Hydra Instance #3 → Go MCP Server
 ```
 
-## 5. Development Standards & Project Structure (Token Efficiency)
+---
 
-**Goal:** Prevent "God Objects," minimize token usage for AI reads, and enforce strict "Class-like" encapsulation.
+## Configuration System
 
-### 5.1 Directory Structure (Strict Package Boundaries)
-Every folder is a self-contained package. No file shall exceed 200 lines if possible.
+### Two-Tier Model
+
+**Tier 1: Global Registry** (Required)
+- Location: `~/.hydra/config.json`
+- Single source of truth for all servers
+- See `docs/CONFIGURATION.md` for complete schema
+
+**Tier 2: Local Override** (Optional)
+- Location: `$CWD/hydra.json`
+- Per-project overrides (watch paths, behavior)
+
+**Discovery:** `hydra run --name my-server`
+```
+1. Load ~/.hydra/config.json (REQUIRED)
+2. Find server entry by name
+3. Load ./hydra.json if present (OPTIONAL)
+4. Merge: defaults < registry < local overrides
+5. Validate and start
+```
+
+---
+
+## State Machine
+
+### States
 
 ```
-/cmd
-  /hydra            # Main entry point (Wiring only, < 50 lines)
-/internal
-  /config           # struct definitions, load logic
-  /transport        # stdio, connection handling
-  /sanitizer        # json/log filtering logic
-  /supervisor       # process management, signal handling
-  /statestore       # in-memory state tracking
-  /recorder         # traffic logging (circular buffer)
-  /proxy            # router & message passing glue
-  /logger           # zerolog wrapper (configured for stderr)
+STOPPED → STARTING → RUNNING → RESTARTING → FAILED
+                                    ↓            ↓
+                                 (success)   (recover)
+                                    ↓            ↓
+                                 RUNNING ← ← STOPPED
 ```
 
-### 5.2 The "Interface-First" Pattern (Class Mimicry)
-All components MUST follow this 3-step pattern. Concrete structs should be private/unexported where possible to force interface usage.
+### State Definitions
+
+| State | Description | Client Requests |
+|-------|-------------|-----------------|
+| STOPPED | No child process | Error response |
+| STARTING | Child spawned, waiting for initialize | Queued, replayed after RUNNING |
+| RUNNING | Child healthy, initialized | Forwarded immediately |
+| RESTARTING | Child terminated, new starting | Queued (max 100, 30s TTL) |
+| FAILED | Crash loop detected | Error response |
+
+### Transitions
+
+| From | Event | To | Action |
+|------|-------|----|----|
+| STOPPED | `hydra run` | STARTING | Spawn child |
+| STARTING | initialize response | RUNNING | Replay state |
+| STARTING | Timeout (10s) | FAILED | Kill child |
+| RUNNING | File change / crash | RESTARTING | Graceful shutdown, spawn new |
+| RESTARTING | initialize response | RUNNING | Replay state, drain queue |
+| RESTARTING | max_restarts exceeded | FAILED | Send crash loop notification |
+| FAILED | `hydra recover` | STOPPED | Reset counter |
+
+**Details:** See `docs/ARCHITECTURE.md`
+
+---
+
+## Core Interfaces
+
+All components MUST use interface-first pattern:
 
 ```go
-// 1. Interface (The Contract) - public
+// 1. Interface (public)
 type Manager interface {
     Start() error
     Stop() error
 }
 
-// 2. Struct (The Class) - private
+// 2. Struct (private)
 type manager struct {
-    cmd *exec.Cmd
+    cmd    *exec.Cmd
+    logger *zerolog.Logger
 }
 
-// 3. Constructor (The Factory) - public
-func NewManager() Manager {
-    return &manager{}
+// 3. Constructor (public)
+func NewManager(logger *zerolog.Logger) Manager {
+    return &manager{logger: logger}
 }
 ```
 
-### 5.3 Safety & IO Rules
-1.  **Banned Package:** `fmt` is BANNED for production code (except `fmt.Errorf`).
-    *   *Reason:* `fmt.Println` writes to stdout, which corrupts the JSON-RPC pipe.
-    *   *Alternative:* Use the `internal/logger` package which writes purely to `stderr`.
-2.  **Zombie Prevention:** All child processes must be spawned with `SysProcAttr` (Setpgid) to ensure they die when Hydra dies.
-3.  **Panic Recovery:** The Main Proxy Loop must have a `defer recover()` block. If Hydra itself panics, log it to `stderr` and send a generic JSON-RPC error to the client. **HYDRA MUST NOT CRASH.**
-4.  **No Global State:** No `var` globals. All dependencies must be injected via Constructors.
+**Required Interfaces:**
+- Transport (stdio communication)
+- Sanitizer (STDIO pollution filter)
+- Supervisor (process lifecycle)
+- StateStore (session state cache)
+- Watcher (file changes)
+- Recorder (traffic debugging)
+- Proxy (orchestrator)
 
-### 5.4 Token & Cost Safeguards (The "Wallet Guard")
-Hydra must actively prevent "Token Bombs" from reaching the AI Agent.
+**Details:** See `docs/ARCHITECTURE.md`
 
-1.  **Log Truncation (Sanitizer Layer):**
-    *   **Rule:** Any captured `stdout` line or `stderr` chunk converted to an MCP log MUST be truncated to **1000 characters**.
-    *   *Format:* `"<content>... [TRUNCATED by Hydra: X bytes omitted]"`
-    *   *Goal:* Prevent massive debug dumps (e.g., printing a DB row) from consuming context window.
+---
 
-2.  **Payload Inspection (Proxy Layer):**
-    *   **Rule:** Inspect `result` payloads from the Child Server.
-    *   **Limit:** Hard cap at **50KB** (approx 12k tokens) per message by default.
-    *   **Action:** If size > Limit, replace content with:
-        `"⚠️ ERROR: Tool output exceeded safety limit (50KB). First 1KB: <snippet>..."`
-    *   *Override:* Allow user to configure `max_output_size` in `hydra.json`.
+## Go Development Standards
 
-3.  **Chatty Server Suppression:**
-    *   **Rule:** Rate limit logs. Max 10 log messages per second.
-    *   **Action:** Drop excess logs and send a summary: `"[Hydra] Suppressed 45 rapid-fire logs."`
+### Banned Practices
 
-## 6. TDD Strategy (Strict Enforcement)
+1. **`fmt.Println` / `fmt.Printf`** in production
+   - Corrupts JSON-RPC stdout stream
+   - Exception: `fmt.Errorf` allowed
+   - Use `internal/logger` (writes to stderr)
 
-### Phase 1: The Sanitizer (Pure Function)
-*   **Test:** Input raw mixed strings (JSON + logs). Assert only JSON comes out one pipe, logs out the other.
-*   **Impl:** Regex/JSON validation.
+2. **Global variables**
+   - Breaks testability
+   - Use dependency injection
 
-### Phase 2: The StateStore (In-Memory)
-*   **Test:** Send `initialize`, then `didChange`. Assert `GetState()` returns correct replay sequence.
-*   **Impl:** Mutex-protected struct.
+3. **Direct struct initialization** (for components)
+   - Use `New*()` constructors
 
-### Phase 3: The Supervisor (Mocked Process)
-*   **Test:** Mock `exec.Command`. Simulate crash (return error). Assert "Restart" event is fired.
-*   **Tool:** Use `mockery` to interface the OS layer.
+4. **Unchecked errors**
+   - Enforced by `golangci-lint`
 
-### Phase 4: Integration
-*   **Test:** Spawn a real "Echo Server" python script. Send messages. Kill script. Send more messages. Assert recovery.
+### Required Practices
 
-## 6. Implementation Plan & Milestones
+1. Interface-first pattern (all components)
+2. Mock implementations (all interfaces)
+3. 80%+ test coverage (95%+ for critical paths)
+4. Error wrapping: `fmt.Errorf("context: %w", err)`
+5. Goroutine lifecycle management (context.Context)
+6. Race-free code (`-race` flag in CI)
 
-1.  **Project Setup:** Init module, setup `cobra`, setup `golangci-lint`.
-2.  **Core Domain:** Define `Message`, `Request`, `Response` structs.
-3.  **Transport:** Implement `Reader` and `Writer` with sanitization.
-4.  **Supervisor:** Implement process lifecycle (Start, Stop, Restart).
-5.  **Proxy:** Wire it all together.
+---
 
-## 7. Open Questions / Risks
-- **Transport Framing:** Does the target MCP server use Content-Length headers (LSP style) or plain NDJSON? *Assumption: NDJSON for now, but architecture must support pluggable framers.*
-- **Windows Support:** Signal handling (SIGTERM) varies on Windows. Go handles this well, but needs testing.
+## Security Model
 
-## 8. Definition of Done
-- CI/CD pipeline runs `go test -race ./...`
-- 90%+ Code Coverage.
-- Passes the "Crash Loop" automated integration test.
+### Threat Boundaries
+
+| Threat | In Scope | Mitigation |
+|--------|----------|------------|
+| Malicious server code | ❌ No | Out of scope (if server is malicious, user is compromised) |
+| Config injection | ✅ Yes | Schema validation, no shell expansion |
+| STDIO injection | ✅ Yes | Sanitizer validates JSON-RPC |
+| Secret leakage | ✅ Yes | Redaction patterns |
+| DoS (large payloads) | ✅ Yes | 50KB size limit |
+| Zombie processes | ✅ Yes | Tree kill (SysProcAttr.Setpgid) |
+| Pre-restart hook hangs | ✅ Yes | Timeout + SIGKILL |
+
+**Details:** See `docs/SECURITY.md`
+
+---
+
+## Injectable Tools
+
+**Reserved Namespace:** `hydra_*`
+
+All Hydra tools start with `hydra_`. If child server exposes `hydra_*` tools, Hydra refuses to start (namespace collision).
+
+**Built-in Tools:**
+- `hydra_restart` - Manual restart
+- `hydra_status` - Get supervisor status
+- `hydra_logs` - View child stderr logs
+- `hydra_force_restart` - Override crash loop protection
+
+**Details:** See `docs/INJECTABLE_TOOLS.md`
+
+---
+
+## Token Safety: "Wallet Guard"
+
+Hydra protects AI agents from token bombs:
+
+1. **Log Truncation:** 1000 chars max per log message
+2. **Payload Limiting:** 50KB max per JSON-RPC response
+3. **Rate Limiting:** 10 logs/second max from child
+
+**Applied to:** Child logs, tool outputs, error messages
+
+---
+
+## Project Structure
+
+```
+/cmd/hydra/main.go           # Entry point (< 100 lines)
+/internal
+  /config                    # Config load, merge, validate
+  /transport                 # Stdio + protocol detection
+  /sanitizer                 # STDIO pollution filter
+  /supervisor                # Process lifecycle
+  /statestore                # State replay
+  /watcher                   # File watching + debounce
+  /recorder                  # Traffic debugging
+  /proxy                     # Orchestrator
+  /injectable                # hydra_* tools
+  /security                  # Redaction, rate limiting
+  /cli                       # CLI commands
+  /logger                    # Zerolog wrapper
+/test
+  /fixtures                  # Test servers
+  /integration               # Integration tests
+  /unit                      # Unit tests
+```
+
+**Rule:** No file > 200 lines (except generated code)
+
+---
+
+## Performance Targets
+
+| Metric | Target |
+|--------|--------|
+| Proxy latency (p50) | < 50ms |
+| Proxy latency (p99) | < 200ms |
+| Restart time (p50) | < 500ms |
+| Restart time (p99) | < 2s |
+| Memory (after 1000 restarts) | < 100MB RSS |
+| CPU (idle) | < 1% |
+| File watch latency | < 100ms |
+
+**Enforced in CI** - Performance regression = CI failure
+
+---
+
+## Definition of Done
+
+### Code Quality
+- [ ] 80%+ test coverage (90%+ for proxy/supervisor)
+- [ ] Tests pass with `-race` flag
+- [ ] `golangci-lint` passes (zero warnings)
+- [ ] All interfaces have mocks
+- [ ] No `fmt.Println` in production code
+- [ ] No global variables
+
+### Functionality
+- [ ] All CLI commands work
+- [ ] All injectable tools work
+- [ ] State machine transitions tested
+- [ ] Crash loop detection works
+- [ ] Subscription resurrection works
+- [ ] Request queueing works
+- [ ] File watch debouncing works
+- [ ] Pre-restart hooks work
+- [ ] Secret redaction works
+- [ ] Payload size limiting works
+
+### Performance
+- [ ] All benchmark targets met
+- [ ] No memory leaks
+
+### Integration
+- [ ] Works with Claude Desktop
+- [ ] Works with Python/Node/Go MCP servers
+- [ ] Chaos tests pass
+
+### Documentation
+- [ ] README with quickstart
+- [ ] All docs complete
+- [ ] CLI reference complete
+
+---
+
+## Implementation Phases
+
+**See `/phases` folder for detailed week-by-week plans:**
+
+1. **Phase 1: Foundation** - Config, transport, sanitizer
+2. **Phase 2: Core Logic** - Supervisor, statestore, watcher
+3. **Phase 3: Orchestration** - Proxy, tools, recorder
+4. **Phase 4: CLI** - Commands, bootstrap logic
+5. **Phase 5: Hardening** - Chaos tests, benchmarks, docs
+
+---
+
+## Related Documentation
+
+- `docs/ARCHITECTURE.md` - Detailed state machines, algorithms
+- `docs/CONFIGURATION.md` - Complete config schema
+- `docs/CLI_REFERENCE.md` - All CLI commands
+- `docs/SECURITY.md` - Threat model, redaction
+- `docs/INJECTABLE_TOOLS.md` - Tool specifications
+- `docs/testing/TESTING_STRATEGY.md` - TDD approach
+- `docs/testing/TEST_SCENARIOS.md` - Test cases
+- `phases/phase-*.md` - Implementation plans
+
+---
+
+## AI Agent Implementation Notes
+
+1. **Start with interfaces** - Define all interfaces before implementation
+2. **TDD mandatory** - Write test, watch fail, implement, refactor
+3. **Files < 200 lines** - Split large files into subpackages
+4. **Reference this PRD** for core rules (read frequently)
+5. **Reference specialized docs** for implementation details (read as-needed)
+6. **When in doubt, ask** - Don't guess behavior
+
+---
+
+**End of Core PRD** - See `/docs` and `/phases` for implementation details.
