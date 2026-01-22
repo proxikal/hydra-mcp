@@ -66,6 +66,7 @@ func main() {
 				BufferSize:            cfg.Recorder.BufferSize,
 				IncludeRequestBodies:  cfg.Recorder.IncludeRequestBodies,
 				IncludeResponseBodies: cfg.Recorder.IncludeResponseBodies,
+				RedactPatterns:        cfg.Security.RedactPatterns,
 			}, nil, l)
 			san := sanitizer.New()
 

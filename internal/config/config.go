@@ -20,6 +20,7 @@ type ServerConfig struct {
 	Behavior        BehaviorConfig        `json:"behavior"`
 	InjectableTools InjectableToolsConfig `json:"injectable_tools"`
 	Recorder        RecorderConfig        `json:"recorder"`
+	Security        SecurityConfig        `json:"security"`
 }
 
 // Defaults holds system-wide default values for all servers.
@@ -67,6 +68,12 @@ type RecorderConfig struct {
 	IncludeResponseBodies bool   `json:"include_response_bodies"`
 	ExportOnCrash         bool   `json:"export_on_crash"`
 	ExportPath            string `json:"export_path"`
+}
+
+// SecurityConfig holds redaction patterns and replacement.
+type SecurityConfig struct {
+	RedactPatterns    []string `json:"redact_patterns"`
+	RedactReplacement string   `json:"redact_replacement"`
 }
 
 // DefaultRegistry returns a registry with safe defaults.
@@ -117,6 +124,17 @@ func DefaultServerConfig() *ServerConfig {
 			IncludeResponseBodies: false,
 			ExportOnCrash:         true,
 			ExportPath:            "/tmp/hydra-traffic-{timestamp}.json",
+		},
+		Security: SecurityConfig{
+			RedactPatterns: []string{
+				"sk-[A-Za-z0-9]{32,}",
+				"API[_-]?KEY",
+				"password",
+				"Bearer [A-Za-z0-9._-]+",
+				"ghp_[A-Za-z0-9]{36}",
+				"xox[baprs]-[A-Za-z0-9-]+",
+			},
+			RedactReplacement: "[REDACTED by Hydra]",
 		},
 	}
 }

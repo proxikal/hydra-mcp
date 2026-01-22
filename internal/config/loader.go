@@ -159,6 +159,9 @@ func (l *fileLoader) Validate(cfg *ServerConfig) error {
 	if cfg.Recorder.BufferSize < 0 {
 		return fmt.Errorf("recorder.buffer_size cannot be negative")
 	}
+	if cfg.Security.RedactPatterns == nil {
+		cfg.Security.RedactPatterns = []string{}
+	}
 	return nil
 }
 
@@ -251,5 +254,13 @@ func mergeServerConfig(dst, src *ServerConfig) {
 	}
 	if src.Recorder.ExportPath != "" {
 		dst.Recorder.ExportPath = src.Recorder.ExportPath
+	}
+
+	// Merge Security
+	if len(src.Security.RedactPatterns) > 0 {
+		dst.Security.RedactPatterns = src.Security.RedactPatterns
+	}
+	if src.Security.RedactReplacement != "" {
+		dst.Security.RedactReplacement = src.Security.RedactReplacement
 	}
 }
