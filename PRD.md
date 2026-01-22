@@ -127,6 +127,25 @@ func NewManager() Manager {
 2.  **Zombie Prevention:** All child processes must be spawned with `SysProcAttr` (Setpgid) to ensure they die when Hydra dies.
 3.  **No Global State:** No `var` globals. All dependencies must be injected via Constructors.
 
+### 5.4 Token & Cost Safeguards (The "Wallet Guard")
+Hydra must actively prevent "Token Bombs" from reaching the AI Agent.
+
+1.  **Log Truncation (Sanitizer Layer):**
+    *   **Rule:** Any captured `stdout` line or `stderr` chunk converted to an MCP log MUST be truncated to **1000 characters**.
+    *   *Format:* `"<content>... [TRUNCATED by Hydra: X bytes omitted]"`
+    *   *Goal:* Prevent massive debug dumps (e.g., printing a DB row) from consuming context window.
+
+2.  **Payload Inspection (Proxy Layer):**
+    *   **Rule:** Inspect `result` payloads from the Child Server.
+    *   **Limit:** Hard cap at **50KB** (approx 12k tokens) per message by default.
+    *   **Action:** If size > Limit, replace content with:
+        `"⚠️ ERROR: Tool output exceeded safety limit (50KB). First 1KB: <snippet>..."`
+    *   *Override:* Allow user to configure `max_output_size` in `hydra.json`.
+
+3.  **Chatty Server Suppression:**
+    *   **Rule:** Rate limit logs. Max 10 log messages per second.
+    *   **Action:** Drop excess logs and send a summary: `"[Hydra] Suppressed 45 rapid-fire logs."`
+
 ## 6. TDD Strategy (Strict Enforcement)
 
 ### Phase 1: The Sanitizer (Pure Function)
