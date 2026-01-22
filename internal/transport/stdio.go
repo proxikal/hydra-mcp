@@ -32,14 +32,14 @@ func NewStdio(in io.ReadCloser, out io.WriteCloser, l logger.Logger) Transport {
 
 func (t *stdioTransport) DetectProtocol(timeout time.Duration) (Protocol, error) {
 	// Simple peek to check for Content-Length header
-	// We need to implement a mechanism to peek with timeout, 
+	// We need to implement a mechanism to peek with timeout,
 	// but for now, we'll assume the caller handles the timeout via context if needed,
 	// or we implement a simple peek logic.
-	
+
 	// WARNING: bufio.Peek blocks. To support true timeout, we'd need a non-blocking underlying reader
-	// or a goroutine. For simplicity in Phase 1, we will implement a blocking peek 
+	// or a goroutine. For simplicity in Phase 1, we will implement a blocking peek
 	// and assume the child sends *something* reasonably fast on startup.
-	
+
 	bytes, err := t.reader.Peek(14) // "Content-Length" is 14 chars
 	if err != nil {
 		return ProtocolUnknown, err
@@ -84,7 +84,7 @@ func (t *stdioTransport) readLSP() ([]byte, error) {
 		if line == "\r\n" {
 			break
 		}
-		
+
 		// Parse Content-Length
 		if len(line) > 16 && line[:16] == "Content-Length: " {
 			val := line[16 : len(line)-2] // trim \r\n
@@ -121,7 +121,7 @@ func (t *stdioTransport) Write(payload []byte) error {
 			payload = append(payload, '\n')
 		}
 	}
-	
+
 	_, err := t.out.Write(payload)
 	return err
 }

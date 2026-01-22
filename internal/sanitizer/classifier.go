@@ -32,7 +32,7 @@ func (s *stdSanitizer) Classify(chunk []byte) ChunkType {
 	// 2. Must be JSON-RPC 2.0
 	// Check for "jsonrpc" field.
 	// We parse it using gjson.GetBytes which is efficient.
-	// Note: We are permissive here. If it's valid JSON but missing "jsonrpc", 
+	// Note: We are permissive here. If it's valid JSON but missing "jsonrpc",
 	// it might still be a response without the version field (rare but possible in some implementations),
 	// OR it's just a random JSON object dumped by the user.
 	// Strict MCP requires `jsonrpc: "2.0"`.
@@ -45,7 +45,7 @@ func (s *stdSanitizer) Classify(chunk []byte) ChunkType {
 	if trimmed[0] == '[' {
 		return ChunkJSONRPC
 	}
-	
+
 	// If it's valid JSON but NOT RPC, it's pollution (e.g. console.log({"foo": "bar"}))
 	return ChunkPollution
 }

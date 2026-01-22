@@ -31,4 +31,3 @@ type Transport interface {
 	// If timeout is reached, it returns an error.
 	DetectProtocol(timeout time.Duration) (Protocol, error)
 }
-

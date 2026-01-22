@@ -11,7 +11,7 @@ import (
 
 func TestLogger(t *testing.T) {
 	var buf bytes.Buffer
-	// Create a raw zerolog to a buffer for testing, 
+	// Create a raw zerolog to a buffer for testing,
 	// though the real New() always goes to stderr.
 	z := zerolog.New(&buf).Level(zerolog.DebugLevel)
 	l := &hydraLogger{z: z}
@@ -39,11 +39,37 @@ func TestLogger(t *testing.T) {
 		// New logger at Info level
 		infoLogger := New("info").(*hydraLogger)
 		infoLogger.z = infoLogger.z.Output(&buf)
-		
+
 		infoLogger.Debug("should not see this")
 		assert.Empty(t, buf.String())
 
 		infoLogger.Info("should see this")
 		assert.NotEmpty(t, buf.String())
 	})
+}
+
+func TestLogger_Warn(t *testing.T) {
+	var buf bytes.Buffer
+	z := zerolog.New(&buf).Level(zerolog.DebugLevel)
+	l := &hydraLogger{z: z}
+
+	buf.Reset()
+	l.Warn("warning message", map[string]interface{}{"code": 404})
+	assert.Contains(t, buf.String(), `"level":"warn"`)
+	assert.Contains(t, buf.String(), `"message":"warning message"`)
+	assert.Contains(t, buf.String(), `"code":404`)
+}
+
+func TestNew_InvalidLevel(t *testing.T) {
+	l := New("invalid-level")
+	assert.NotNil(t, l)
+	// Should default to InfoLevel when invalid
+}
+
+func TestNew_ValidLevels(t *testing.T) {
+	levels := []string{"debug", "info", "warn", "error"}
+	for _, level := range levels {
+		l := New(level)
+		assert.NotNil(t, l)
+	}
 }
