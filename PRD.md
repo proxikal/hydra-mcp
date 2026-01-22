@@ -44,14 +44,18 @@ Hydra is a robust, fault-tolerant **Supervisor & Proxy** for Model Context Proto
   * *Why:* Auto-load `.env` files. Essential because Hydra controls the child process environment.
 * **Library:** `github.com/sabhiram/go-gitignore`
   * *Why:* Parse `.gitignore` files to prevent restart loops from log files or temp artifacts.
+* **Library:** `github.com/shirou/gopsutil` (or specific tree-kill logic)
+  * *Why:* Reliable Cross-Platform "Tree Kill" to ensure `npm` -> `node` chains are fully terminated.
 
 ## 4. Architecture Specifications
 
 ### 4.1 Component Diagram
 1.  **Transport Interface (`Transport`):** Abstract interface for `Read()` and `Write()`.
-    *   *Implementation:* `StdioTransport` (initial), with room for `SSETransport` / `HTTPTransport`.
+    *   *Feature:* **Protocol Sniffer.** Auto-detects `Content-Length:` (LSP-style) vs `{\n` (NDJSON) headers.
+    *   *Feature:* **UTF-8 Validator.** Replaces invalid byte sequences with `?` to prevent crashes.
 2.  **Sanitizer:** A robust stream filter that classifies chunks as "Valid JSON-RPC" or "Pollution".
 3.  **Supervisor:** Manages the `os.Cmd` process. Handles signals (SIGINT/SIGTERM).
+    *   *Feature:* **Tree Kill.** Terminates entire process groups (Windows/Unix compatible).
 4.  **StateStore:** In-memory store (thread-safe) for `initialize` params and `didChange` history.
 5.  **TrafficRecorder:** Circular buffer (last 50 req/res) for debugging.
 6.  **ToolInjector:** Merges Hydra's meta-tools (`hydra_restart`, `hydra_logs`) with Child tools.
