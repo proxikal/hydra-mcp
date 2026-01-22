@@ -27,8 +27,9 @@ graph LR
     AI["AI Agent"] <-->|"Stdio (Safe)"| Hydra["Hydra Proxy"]
     Hydra <-->|"Stdio (Raw)"| Child["MCP Server"]
     
-    style Hydra fill:#d4ffea,stroke:#00b862,stroke-width:2px
-    style Child fill:#ffdddd,stroke:#ff5555,stroke-width:2px,stroke-dasharray: 5 5
+    style Hydra fill:#e6fffa,stroke:#2c7a7b,stroke-width:2px,color:#234e52
+    style Child fill:#fff5f5,stroke:#e53e3e,stroke-width:2px,stroke-dasharray: 5 5,color:#742a2a
+    style AI fill:#ebf8ff,stroke:#3182ce,stroke-width:2px,color:#2c5282
 ```
 
 ### Key Capabilities
