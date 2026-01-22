@@ -37,7 +37,7 @@ func TestEchoServerFixtureRuns(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 
 	// Send initialize
 	initReq := []byte(`{"jsonrpc":"2.0","id":1,"method":"initialize"}` + "\n")
@@ -180,8 +180,8 @@ func TestProxyQueueAndDrainWithChannelTransports(t *testing.T) {
 	child.in <- []byte(`{"jsonrpc":"2.0","id":0,"result":{"ok":true}}`)
 
 	time.Sleep(200 * time.Millisecond)
-	client.Close()
-	child.Close()
+	_ = client.Close()
+	_ = child.Close()
 	wg.Wait()
 
 	assert.Len(t, child.writes, 2)

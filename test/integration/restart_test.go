@@ -74,7 +74,7 @@ func TestProxyEchoIntegration(t *testing.T) {
 
 	err = cmd.Start()
 	assert.NoError(t, err)
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 
 	childTransport := transport.NewStdio(childOut, childIn, log)
 	clientTransport := newChannelTransport()
@@ -112,7 +112,7 @@ func TestProxyEchoIntegration(t *testing.T) {
 	clientTransport.in <- []byte(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"foo":"bar"}}`)
 	time.Sleep(200 * time.Millisecond)
 
-	clientTransport.Close()
+	_ = clientTransport.Close()
 	wg.Wait()
 
 	assert.GreaterOrEqual(t, len(clientTransport.writes), 2)
@@ -133,7 +133,7 @@ func TestProxyProcessQueueDrain(t *testing.T) {
 
 	err = cmd.Start()
 	assert.NoError(t, err)
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 
 	childTransport := transport.NewStdio(childOut, childIn, log)
 	clientTransport := newChannelTransport()
@@ -168,7 +168,7 @@ func TestProxyProcessQueueDrain(t *testing.T) {
 
 	time.Sleep(300 * time.Millisecond)
 
-	clientTransport.Close()
+	_ = clientTransport.Close()
 	wg.Wait()
 
 	assert.GreaterOrEqual(t, len(clientTransport.writes), 2)

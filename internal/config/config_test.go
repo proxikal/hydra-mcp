@@ -155,7 +155,7 @@ func TestMergeServerConfig(t *testing.T) {
 			Command: "new",
 			Args:    []string{"arg1", "arg2"},
 		}
-		mergeServerConfig(dst, src)
+		MergeServerConfig(dst, src)
 		assert.Equal(t, "new", dst.Command)
 		assert.Equal(t, []string{"arg1", "arg2"}, dst.Args)
 	})
@@ -166,7 +166,7 @@ func TestMergeServerConfig(t *testing.T) {
 			CWD:     "/custom/path",
 			EnvFile: ".env.prod",
 		}
-		mergeServerConfig(dst, src)
+		MergeServerConfig(dst, src)
 		assert.Equal(t, "/custom/path", dst.CWD)
 		assert.Equal(t, ".env.prod", dst.EnvFile)
 	})
@@ -177,7 +177,7 @@ func TestMergeServerConfig(t *testing.T) {
 		src := &ServerConfig{
 			Environment: map[string]string{"KEY2": "val2"},
 		}
-		mergeServerConfig(dst, src)
+		MergeServerConfig(dst, src)
 		assert.Equal(t, "val1", dst.Environment["KEY1"])
 		assert.Equal(t, "val2", dst.Environment["KEY2"])
 	})
@@ -193,7 +193,7 @@ func TestMergeServerConfig(t *testing.T) {
 				Ignore:      []string{"target"},
 			},
 		}
-		mergeServerConfig(dst, src)
+		MergeServerConfig(dst, src)
 		assert.True(t, dst.Watch.Enabled)
 		assert.Equal(t, []string{"/custom/path"}, dst.Watch.Paths)
 		assert.Equal(t, []string{".rs"}, dst.Watch.Extensions)
@@ -212,7 +212,7 @@ func TestMergeServerConfig(t *testing.T) {
 				PreRestartCommand:  "cleanup.sh",
 			},
 		}
-		mergeServerConfig(dst, src)
+		MergeServerConfig(dst, src)
 		assert.Equal(t, 1000, dst.Behavior.DebounceMS)
 		assert.Equal(t, 100, dst.Behavior.RestartDelayMS)
 		assert.Equal(t, 5, dst.Behavior.MaxRestarts)
@@ -534,7 +534,7 @@ func TestMerge_EdgeCases(t *testing.T) {
 		dst := &ServerConfig{Environment: nil}
 		src := &ServerConfig{Environment: map[string]string{"KEY": "val"}}
 
-		mergeServerConfig(dst, src)
+		MergeServerConfig(dst, src)
 		assert.NotNil(t, dst.Environment)
 		assert.Equal(t, "val", dst.Environment["KEY"])
 	})
@@ -549,7 +549,7 @@ func TestMerge_EdgeCases(t *testing.T) {
 			},
 		}
 
-		mergeServerConfig(dst, src)
+		MergeServerConfig(dst, src)
 		// Zero values shouldn't override existing values
 		assert.Equal(t, 1000, dst.Behavior.DebounceMS)
 	})

@@ -63,6 +63,15 @@ func TestRedactor_InvalidPattern(t *testing.T) {
 	assert.Equal(t, content, result)
 }
 
+func TestRedactor_CustomReplacement(t *testing.T) {
+	r := NewRedactorWithReplacement("<hidden>")
+
+	content := "token=abc123"
+	result := r.Redact(content, []string{`token=\w+`})
+
+	assert.Equal(t, "<hidden>", result)
+}
+
 // RateLimiter Tests
 
 func TestRateLimiter_AllowsBurst(t *testing.T) {

@@ -12,16 +12,16 @@ import (
 )
 
 type fsWatcher struct {
-	paths        []string
-	ignoreList   *ignore.GitIgnore
-	debounce     time.Duration
-	batchWindow  time.Duration
-	logger       logger.Logger
-	watcher      *fsnotify.Watcher
-	events       chan WatchEvent
-	done         chan struct{}
-	lastEvent    time.Time
-	batchTimer   *time.Timer
+	paths       []string
+	ignoreList  *ignore.GitIgnore
+	debounce    time.Duration
+	batchWindow time.Duration
+	logger      logger.Logger
+	watcher     *fsnotify.Watcher
+	events      chan WatchEvent
+	done        chan struct{}
+	lastEvent   time.Time
+	batchTimer  *time.Timer
 }
 
 // New creates a new file system watcher with debouncing
@@ -56,7 +56,7 @@ func (w *fsWatcher) Start() error {
 	// Add paths
 	for _, path := range w.paths {
 		if err := w.watcher.Add(path); err != nil {
-			w.watcher.Close()
+			_ = w.watcher.Close()
 			return fmt.Errorf("failed to watch path %s: %w", path, err)
 		}
 	}

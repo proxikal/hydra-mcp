@@ -109,7 +109,7 @@ func (l *fileLoader) ResolveServer(serverName, localOverridePath string) (*Serve
 	final := DefaultServerConfig()
 
 	// 4. Apply registry server config
-	mergeServerConfig(final, serverCfg)
+	MergeServerConfig(final, serverCfg)
 
 	// 5. Load and merge local override if present
 	if localOverridePath != "" {
@@ -118,7 +118,7 @@ func (l *fileLoader) ResolveServer(serverName, localOverridePath string) (*Serve
 			return nil, fmt.Errorf("failed to load local override: %w", err)
 		}
 		if localCfg != nil {
-			mergeServerConfig(final, localCfg)
+			MergeServerConfig(final, localCfg)
 		}
 	}
 
@@ -165,8 +165,8 @@ func (l *fileLoader) Validate(cfg *ServerConfig) error {
 	return nil
 }
 
-// mergeServerConfig merges src into dst (src wins on conflicts).
-func mergeServerConfig(dst, src *ServerConfig) {
+// MergeServerConfig merges src into dst (src wins on conflicts).
+func MergeServerConfig(dst, src *ServerConfig) {
 	if src.Command != "" {
 		dst.Command = src.Command
 	}

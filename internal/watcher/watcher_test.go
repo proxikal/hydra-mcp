@@ -24,7 +24,7 @@ func TestWatcher_SingleFileChange(t *testing.T) {
 
 	err = w.Start()
 	require.NoError(t, err)
-	defer w.Stop()
+	defer func() { _ = w.Stop() }()
 
 	// Create file
 	err = os.WriteFile(testFile, []byte("hello"), 0644)
@@ -52,7 +52,7 @@ func TestWatcher_RapidChangesBatched(t *testing.T) {
 
 	err = w.Start()
 	require.NoError(t, err)
-	defer w.Stop()
+	defer func() { _ = w.Stop() }()
 
 	// Make rapid changes
 	for i := 0; i < 5; i++ {
@@ -113,7 +113,7 @@ func TestWatcher_GitignorePatterns(t *testing.T) {
 
 	err = w.Start()
 	require.NoError(t, err)
-	defer w.Stop()
+	defer func() { _ = w.Stop() }()
 
 	// Change ignored file
 	err = os.WriteFile(ignoredFile, []byte("ignored"), 0644)
@@ -157,7 +157,7 @@ func TestWatcher_BatchWindowExpiration(t *testing.T) {
 
 	err = w.Start()
 	require.NoError(t, err)
-	defer w.Stop()
+	defer func() { _ = w.Stop() }()
 
 	// Create file
 	err = os.WriteFile(testFile, []byte("test"), 0644)

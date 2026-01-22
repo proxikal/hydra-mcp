@@ -12,19 +12,19 @@ import (
 )
 
 type supervisor struct {
-	cmd            []string
-	maxRestarts    int
-	restartWindow  time.Duration
-	logger         logger.Logger
-	mu             sync.RWMutex
-	state          ServerState
-	process        *exec.Cmd
-	pid            int
-	startTime      time.Time
-	lastError      error
-	restartCount   int
-	restartTimes   []time.Time
-	monitorCancel  context.CancelFunc
+	cmd           []string
+	maxRestarts   int
+	restartWindow time.Duration
+	logger        logger.Logger
+	mu            sync.RWMutex
+	state         ServerState
+	process       *exec.Cmd
+	pid           int
+	startTime     time.Time
+	lastError     error
+	restartCount  int
+	restartTimes  []time.Time
+	monitorCancel context.CancelFunc
 }
 
 // NewSupervisor creates a new supervisor for managing a child process

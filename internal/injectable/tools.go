@@ -74,7 +74,7 @@ func New(
 	log logger.Logger,
 	buffer LogBuffer,
 ) InjectableTools {
-	if opts.Tools == nil || len(opts.Tools) == 0 {
+	if len(opts.Tools) == 0 {
 		opts.Tools = []string{
 			"hydra_restart",
 			"hydra_status",

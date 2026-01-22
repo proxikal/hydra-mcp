@@ -72,7 +72,7 @@ func TestProxyCrashServerProcessFails(t *testing.T) {
 
 	err = cmd.Start()
 	assert.NoError(t, err)
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 
 	child := transport.NewStdio(childOut, childIn, log)
 	client := newChanTransport()
