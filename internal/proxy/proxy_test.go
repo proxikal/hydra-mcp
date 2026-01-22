@@ -342,3 +342,279 @@ func TestLoopErrorTransitionsFailed(t *testing.T) {
 	assert.Equal(t, StateFailed, p.state)
 	assert.Contains(t, p.lastError, "child read error")
 }
+
+func TestProxyNew(t *testing.T) {
+	mockSup := new(mocks.Supervisor)
+	mockSup.On("State").Return(supervisor.StateStopped)
+	mockSup.On("PID").Return(0)
+	mockSup.On("Uptime").Return(time.Duration(0))
+	mockSup.On("LastError").Return(nil)
+
+	mockTransport := new(mocks.Transport)
+	mockSanitizer := new(mocks.Sanitizer)
+	mockRedactor := new(mocks.Redactor)
+	mockStateStore := new(mocks.StateStore)
+	mockLogger := new(mocks.Logger)
+	mockRec := new(mockRecorder)
+
+	deps := Dependencies{
+		Logger:              mockLogger,
+		Sanitizer:           mockSanitizer,
+		Supervisor:          mockSup,
+		Child:               mockTransport,
+		Client:              mockTransport,
+		Recorder:            mockRec,
+		Redactor:            mockRedactor,
+		StateStore:          mockStateStore,
+		HydraTools:          []injectable.ToolDefinition{{Name: "hydra_test"}},
+		MaxRestartsInWindow: func() int { return 3 },
+		MaxRestarts:         func() int { return 5 },
+	}
+
+	opts := Options{
+		QueueSize:          100,
+		QueueTTL:           30 * time.Second,
+		CollisionPolicy:    "warn",
+		HydraTools:         []injectable.ToolDefinition{{Name: "hydra_test"}},
+		CrashExportEnabled: true,
+		CrashExportPath:    "/tmp/crash.json",
+	}
+
+	p := New(deps, opts)
+	assert.NotNil(t, p)
+
+	status := p.Status()
+	assert.Equal(t, supervisor.StateStopped, status.State)
+}
+
+func TestProxyShutdown(t *testing.T) {
+	mockSup := new(mocks.Supervisor)
+	mockSup.On("Stop").Return(nil).Once()
+
+	mockTransport := new(mocks.Transport)
+	mockTransport.On("Close").Return(nil).Once()
+
+	p := &proxy{
+		state:      StateRunning,
+		supervisor: mockSup,
+		child:      mockTransport,
+		client:     nil,
+		stopCh:     make(chan struct{}),
+	}
+
+	err := p.Shutdown()
+	assert.NoError(t, err)
+	assert.Equal(t, StateStopped, p.state)
+	mockSup.AssertExpectations(t)
+	mockTransport.AssertExpectations(t)
+}
+
+func TestProxyShutdownWithoutSupervisor(t *testing.T) {
+	p := &proxy{
+		state:  StateRunning,
+		stopCh: make(chan struct{}),
+	}
+
+	err := p.Shutdown()
+	assert.NoError(t, err)
+	assert.Equal(t, StateStopped, p.state)
+}
+
+func TestProxyUpdateStateStore(t *testing.T) {
+	t.Run("stores initialize params", func(t *testing.T) {
+		mockStateStore := new(mocks.StateStore)
+		mockStateStore.On("SetInitialize", mock.Anything).Once()
+
+		p := &proxy{
+			stateStore: mockStateStore,
+		}
+
+		msg := recorder.JSONRPCMessage{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "initialize",
+			Params:  json.RawMessage(`{"version":"1.0"}`),
+		}
+
+		p.updateStateStore(msg)
+		mockStateStore.AssertExpectations(t)
+	})
+
+	t.Run("adds subscription on resources/subscribe", func(t *testing.T) {
+		mockStateStore := new(mocks.StateStore)
+		mockStateStore.On("AddSubscription", "file:///test").Once()
+
+		p := &proxy{
+			stateStore: mockStateStore,
+		}
+
+		msg := recorder.JSONRPCMessage{
+			JSONRPC: "2.0",
+			Method:  "resources/subscribe",
+			Params:  json.RawMessage(`{"uri":"file:///test"}`),
+		}
+
+		p.updateStateStore(msg)
+		mockStateStore.AssertExpectations(t)
+	})
+
+	t.Run("removes subscription on resources/unsubscribe", func(t *testing.T) {
+		mockStateStore := new(mocks.StateStore)
+		mockStateStore.On("RemoveSubscription", "file:///test").Once()
+
+		p := &proxy{
+			stateStore: mockStateStore,
+		}
+
+		msg := recorder.JSONRPCMessage{
+			JSONRPC: "2.0",
+			Method:  "resources/unsubscribe",
+			Params:  json.RawMessage(`{"uri":"file:///test"}`),
+		}
+
+		p.updateStateStore(msg)
+		mockStateStore.AssertExpectations(t)
+	})
+}
+
+func TestProxyRecord(t *testing.T) {
+	mockRec := new(mockRecorder)
+
+	t.Run("records request when recorder exists", func(t *testing.T) {
+		mockRec.On("RecordRequest", "client->child", mock.Anything).Once()
+
+		p := &proxy{
+			recorder: mockRec,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test"}`)
+		p.record("client->child", payload, true)
+		mockRec.AssertExpectations(t)
+	})
+
+	t.Run("records response when recorder exists", func(t *testing.T) {
+		mockRec.On("RecordResponse", "child->client", mock.Anything).Once()
+
+		p := &proxy{
+			recorder: mockRec,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"result":"ok"}`)
+		p.record("child->client", payload, false)
+		mockRec.AssertExpectations(t)
+	})
+
+	t.Run("handles nil recorder", func(t *testing.T) {
+		p := &proxy{
+			recorder: nil,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test"}`)
+		// Should not panic
+		p.record("client->child", payload, true)
+	})
+
+	t.Run("handles invalid JSON", func(t *testing.T) {
+		p := &proxy{
+			recorder: mockRec,
+		}
+
+		payload := []byte(`invalid json`)
+		// Should not panic
+		p.record("client->child", payload, true)
+	})
+}
+
+func TestProxyForwardToChild(t *testing.T) {
+	t.Run("forwards when child exists", func(t *testing.T) {
+		mockTransport := new(mocks.Transport)
+		mockTransport.On("Write", mock.Anything).Return(nil).Once()
+
+		p := &proxy{
+			child: mockTransport,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test"}`)
+		p.forwardToChild(payload)
+		mockTransport.AssertExpectations(t)
+	})
+
+	t.Run("handles nil child", func(t *testing.T) {
+		mockLogger := new(mocks.Logger)
+		mockLogger.On("Error", mock.Anything, mock.Anything).Maybe()
+
+		p := &proxy{
+			child:  nil,
+			logger: mockLogger,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test"}`)
+		// Should not panic
+		p.forwardToChild(payload)
+	})
+
+	t.Run("handles write error", func(t *testing.T) {
+		mockTransport := new(mocks.Transport)
+		mockTransport.On("Write", mock.Anything).Return(io.ErrClosedPipe).Once()
+
+		mockLogger := new(mocks.Logger)
+		mockLogger.On("Error", mock.Anything, mock.Anything).Once()
+
+		p := &proxy{
+			child:  mockTransport,
+			logger: mockLogger,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"method":"test"}`)
+		p.forwardToChild(payload)
+		mockTransport.AssertExpectations(t)
+		mockLogger.AssertExpectations(t)
+	})
+}
+
+func TestProxyForwardToClient(t *testing.T) {
+	t.Run("forwards when client exists", func(t *testing.T) {
+		mockTransport := new(mocks.Transport)
+		mockTransport.On("Write", mock.Anything).Return(nil).Once()
+
+		p := &proxy{
+			client: mockTransport,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"result":"ok"}`)
+		p.forwardToClient(payload)
+		mockTransport.AssertExpectations(t)
+	})
+
+	t.Run("handles nil client", func(t *testing.T) {
+		mockLogger := new(mocks.Logger)
+		mockLogger.On("Error", mock.Anything, mock.Anything).Maybe()
+
+		p := &proxy{
+			client: nil,
+			logger: mockLogger,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"result":"ok"}`)
+		// Should not panic
+		p.forwardToClient(payload)
+	})
+
+	t.Run("handles write error", func(t *testing.T) {
+		mockTransport := new(mocks.Transport)
+		mockTransport.On("Write", mock.Anything).Return(io.ErrClosedPipe).Once()
+
+		mockLogger := new(mocks.Logger)
+		mockLogger.On("Error", mock.Anything, mock.Anything).Once()
+
+		p := &proxy{
+			client: mockTransport,
+			logger: mockLogger,
+		}
+
+		payload := []byte(`{"jsonrpc":"2.0","id":1,"result":"ok"}`)
+		p.forwardToClient(payload)
+		mockTransport.AssertExpectations(t)
+		mockLogger.AssertExpectations(t)
+	})
+}

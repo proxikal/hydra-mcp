@@ -185,3 +185,68 @@ func TestSupervisor_ResetRestartCounter(t *testing.T) {
 
 	_ = sup.Stop()
 }
+
+func TestSupervisor_LastError(t *testing.T) {
+	log := logger.New("error")
+
+	t.Run("no error when successful", func(t *testing.T) {
+		cmd := []string{"sleep", "1"}
+		sup := NewSupervisor(cmd, 3, 60*time.Second, log)
+
+		err := sup.Start()
+		require.NoError(t, err)
+
+		time.Sleep(100 * time.Millisecond)
+		assert.Nil(t, sup.LastError())
+
+		_ = sup.Stop()
+	})
+
+	t.Run("captures error on failed start", func(t *testing.T) {
+		cmd := []string{"/nonexistent/command"}
+		sup := NewSupervisor(cmd, 3, 60*time.Second, log)
+
+		err := sup.Start()
+		assert.Error(t, err)
+
+		lastErr := sup.LastError()
+		assert.NotNil(t, lastErr)
+		assert.Contains(t, lastErr.Error(), "no such file or directory")
+	})
+
+	t.Run("captures error on crash", func(t *testing.T) {
+		cmd := []string{"false"} // exits immediately with code 1
+		sup := NewSupervisor(cmd, 1, 60*time.Second, log)
+
+		_ = sup.Start()
+		time.Sleep(200 * time.Millisecond)
+
+		lastErr := sup.LastError()
+		if lastErr != nil {
+			// Error should mention exit status
+			assert.Contains(t, lastErr.Error(), "exit")
+		}
+
+		_ = sup.Stop()
+	})
+}
+
+func TestServerState_String(t *testing.T) {
+	tests := []struct {
+		state    ServerState
+		expected string
+	}{
+		{StateStopped, "stopped"},
+		{StateStarting, "starting"},
+		{StateRunning, "running"},
+		{StateRestarting, "restarting"},
+		{StateFailed, "failed"},
+		{ServerState(99), "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.state.String())
+		})
+	}
+}
