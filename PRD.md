@@ -42,6 +42,8 @@ Hydra is a robust, fault-tolerant **Supervisor & Proxy** for Model Context Proto
 #### 6. Utilities
 * **Library:** `github.com/joho/godotenv`
   * *Why:* Auto-load `.env` files. Essential because Hydra controls the child process environment.
+* **Library:** `github.com/sabhiram/go-gitignore`
+  * *Why:* Parse `.gitignore` files to prevent restart loops from log files or temp artifacts.
 
 ## 4. Architecture Specifications
 
@@ -52,7 +54,8 @@ Hydra is a robust, fault-tolerant **Supervisor & Proxy** for Model Context Proto
 3.  **Supervisor:** Manages the `os.Cmd` process. Handles signals (SIGINT/SIGTERM).
 4.  **StateStore:** In-memory store (thread-safe) for `initialize` params and `didChange` history.
 5.  **TrafficRecorder:** Circular buffer (last 50 req/res) for debugging.
-6.  **Proxy:** The glue. Routes messages between Transport, StateStore, and Supervisor.
+6.  **ToolInjector:** Merges Hydra's meta-tools (`hydra_restart`, `hydra_logs`) with Child tools.
+7.  **Proxy:** The glue. Routes messages between Transport, StateStore, and Supervisor.
 
 ### 4.2 Configuration Schema (`hydra.json`)
 To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` in the root.
@@ -69,12 +72,14 @@ To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` 
   },
   "watch": {
     "paths": ["./src", "./lib"],
+    "ignore_files": [".gitignore"],
     "extensions": [".py", ".json"],
     "ignore": ["**/__pycache__", "**/*.log"]
   },
   "behavior": {
     "debounce_ms": 500,
     "restart_delay_ms": 0,
+    "graceful_shutdown_ms": 2000,
     "max_restarts": 10
   }
 }
