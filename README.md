@@ -24,8 +24,8 @@ Hydra sits between the AI Client and your MCP Server. It **never dies**, even if
 
 ```mermaid
 graph LR
-    AI[AI Agent] <-->|Stdio (Safe)| Hydra[Hydra Proxy]
-    Hydra <-->|Stdio (Raw)| Child[MCP Server]
+    AI["AI Agent"] <-->|"Stdio (Safe)"| Hydra["Hydra Proxy"]
+    Hydra <-->|"Stdio (Raw)"| Child["MCP Server"]
     
     style Hydra fill:#d4ffea,stroke:#00b862,stroke-width:2px
     style Child fill:#ffdddd,stroke:#ff5555,stroke-width:2px,stroke-dasharray: 5 5
