@@ -39,9 +39,9 @@ Hydra is a robust, fault-tolerant **Supervisor & Proxy** for Model Context Proto
 * **Mocking:** `github.com/vektra/mockery`
   * *Why:* Auto-generates mocks from interfaces. Essential for testing the `Supervisor` without actually spawning real OS processes every time.
 
-#### 5. Logging (Structured)
-* **Library:** `github.com/rs/zerolog`
-  * *Why:* Zero-allocation JSON logger. We need high-performance logging to separate "Hydra Logs" from "Traffic Logs".
+#### 6. Utilities
+* **Library:** `github.com/joho/godotenv`
+  * *Why:* Auto-load `.env` files. Essential because Hydra controls the child process environment.
 
 ## 4. Architecture Specifications
 
@@ -51,7 +51,8 @@ Hydra is a robust, fault-tolerant **Supervisor & Proxy** for Model Context Proto
 2.  **Sanitizer:** A robust stream filter that classifies chunks as "Valid JSON-RPC" or "Pollution".
 3.  **Supervisor:** Manages the `os.Cmd` process. Handles signals (SIGINT/SIGTERM).
 4.  **StateStore:** In-memory store (thread-safe) for `initialize` params and `didChange` history.
-5.  **Proxy:** The glue. Routes messages between Transport, StateStore, and Supervisor.
+5.  **TrafficRecorder:** Circular buffer (last 50 req/res) for debugging.
+6.  **Proxy:** The glue. Routes messages between Transport, StateStore, and Supervisor.
 
 ### 4.2 Configuration Schema (`hydra.json`)
 To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` in the root.
@@ -61,6 +62,7 @@ To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` 
   "$schema": "https://hydra.mcp.dev/schema.json",
   "command": "python",
   "args": ["server.py"],
+  "env_file": ".env",
   "environment": {
     "DEBUG": "true",
     "API_KEY": "${ENV:API_KEY}"
@@ -77,7 +79,6 @@ To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` 
   }
 }
 ```
-*Rationale:* A JSON file is easily generated/read by AI. The `$schema` key allows IDEs (and AI) to validate the config structure automatically.
 
 ## 5. Development Standards & Project Structure (Token Efficiency)
 
@@ -95,6 +96,7 @@ Every folder is a self-contained package. No file shall exceed 200 lines if poss
   /sanitizer        # json/log filtering logic
   /supervisor       # process management, signal handling
   /statestore       # in-memory state tracking
+  /recorder         # traffic logging (circular buffer)
   /proxy            # router & message passing glue
   /logger           # zerolog wrapper (configured for stderr)
 ```
@@ -125,7 +127,8 @@ func NewManager() Manager {
     *   *Reason:* `fmt.Println` writes to stdout, which corrupts the JSON-RPC pipe.
     *   *Alternative:* Use the `internal/logger` package which writes purely to `stderr`.
 2.  **Zombie Prevention:** All child processes must be spawned with `SysProcAttr` (Setpgid) to ensure they die when Hydra dies.
-3.  **No Global State:** No `var` globals. All dependencies must be injected via Constructors.
+3.  **Panic Recovery:** The Main Proxy Loop must have a `defer recover()` block. If Hydra itself panics, log it to `stderr` and send a generic JSON-RPC error to the client. **HYDRA MUST NOT CRASH.**
+4.  **No Global State:** No `var` globals. All dependencies must be injected via Constructors.
 
 ### 5.4 Token & Cost Safeguards (The "Wallet Guard")
 Hydra must actively prevent "Token Bombs" from reaching the AI Agent.
