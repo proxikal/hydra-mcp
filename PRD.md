@@ -56,6 +56,8 @@ Hydra is a robust, fault-tolerant **Supervisor & Proxy** for Model Context Proto
 5.  **TrafficRecorder:** Circular buffer (last 50 req/res) for debugging.
 6.  **ToolInjector:** Merges Hydra's meta-tools (`hydra_restart`, `hydra_logs`) with Child tools.
 7.  **Proxy:** The glue. Routes messages between Transport, StateStore, and Supervisor.
+    *   *Feature:* **Subscription Resurrection.** Caches `resources/subscribe` requests and replays them on restart.
+    *   *Feature:* **Broad Invalidation.** Sends `tools/list_changed`, `resources/list_changed`, and `prompts/list_changed` after every successful restart.
 
 ### 4.2 Configuration Schema (`hydra.json`)
 To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` in the root.
@@ -80,6 +82,7 @@ To ensure zero-friction setup for AI agents, Hydra will look for a `hydra.json` 
     "debounce_ms": 500,
     "restart_delay_ms": 0,
     "graceful_shutdown_ms": 2000,
+    "pre_restart_command": "find . -name '*.pyc' -delete",
     "max_restarts": 10
   }
 }
