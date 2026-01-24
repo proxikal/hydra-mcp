@@ -29,5 +29,7 @@ Thumbs.db
 # Project specific
 hydra
 .hydra/
+.cerberus/
+.gemini/
 traffic.log
 .env
