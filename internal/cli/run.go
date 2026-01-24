@@ -78,6 +78,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		log,
 	)
 
+	// Start supervisor to create stdin/stdout pipes
+	// Note: proxy will also call Start(), but it's idempotent
+	if err := sup.Start(); err != nil {
+		return fmt.Errorf("failed to start supervisor: %w", err)
+	}
+
 	store := statestore.New()
 	redactor := security.NewRedactorWithReplacement(merged.Security.RedactReplacement)
 	rec := recorder.NewRecorder(recorder.Options{
@@ -90,10 +96,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	san := sanitizer.New()
 
-	stdin := os.Stdin
-	stdout := os.Stdout
-	childTransport := transport.NewStdio(stdin, stdout, log)
-	clientTransport := transport.NewStdio(stdin, stdout, log)
+	// Use supervisor's pipes for child transport
+	childTransport := transport.NewStdio(sup.Stdout(), sup.Stdin(), log)
+	clientTransport := transport.NewStdio(os.Stdin, os.Stdout, log)
 
 	p := proxy.New(
 		proxy.Dependencies{

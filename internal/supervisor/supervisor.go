@@ -1,6 +1,9 @@
 package supervisor
 
-import "time"
+import (
+	"io"
+	"time"
+)
 
 // ServerState represents the current state of the supervised process
 type ServerState int
@@ -41,4 +44,6 @@ type Supervisor interface {
 	Uptime() time.Duration
 	LastError() error
 	ResetRestartCounter()
+	Stdin() io.WriteCloser
+	Stdout() io.ReadCloser
 }

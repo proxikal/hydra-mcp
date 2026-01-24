@@ -3,6 +3,7 @@
 package mocks
 
 import (
+	io "io"
 	time "time"
 
 	supervisor "github.com/proxikal/hydra/internal/supervisor"
@@ -140,6 +141,46 @@ func (_m *Supervisor) Uptime() time.Duration {
 		r0 = rf()
 	} else {
 		r0 = ret.Get(0).(time.Duration)
+	}
+
+	return r0
+}
+
+// Stdin provides a mock function with no fields
+func (_m *Supervisor) Stdin() io.WriteCloser {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Stdin")
+	}
+
+	var r0 io.WriteCloser
+	if rf, ok := ret.Get(0).(func() io.WriteCloser); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(io.WriteCloser)
+		}
+	}
+
+	return r0
+}
+
+// Stdout provides a mock function with no fields
+func (_m *Supervisor) Stdout() io.ReadCloser {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Stdout")
+	}
+
+	var r0 io.ReadCloser
+	if rf, ok := ret.Get(0).(func() io.ReadCloser); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(io.ReadCloser)
+		}
 	}
 
 	return r0

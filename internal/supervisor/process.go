@@ -3,6 +3,7 @@ package supervisor
 import (
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -20,6 +21,8 @@ type supervisor struct {
 	mu            sync.RWMutex
 	state         ServerState
 	process       *exec.Cmd
+	stdin         io.WriteCloser
+	stdout        io.ReadCloser
 	pid           int
 	startTime     time.Time
 	lastError     error
@@ -47,7 +50,8 @@ func (s *supervisor) Start() error {
 	defer s.mu.Unlock()
 
 	if s.state == StateRunning || s.state == StateStarting {
-		return fmt.Errorf("process already running")
+		// Already started, return success (idempotent)
+		return nil
 	}
 
 	s.state = StateStarting
@@ -71,6 +75,23 @@ func (s *supervisor) Start() error {
 		Setpgid: true,
 	}
 
+	// Create pipes for stdin/stdout
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		s.state = StateFailed
+		s.lastError = err
+		s.logger.Error("failed to create stdin pipe", err, nil)
+		return err
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		s.state = StateFailed
+		s.lastError = err
+		s.logger.Error("failed to create stdout pipe", err, nil)
+		return err
+	}
+
 	// Start process
 	if err := cmd.Start(); err != nil {
 		s.state = StateFailed
@@ -78,6 +99,10 @@ func (s *supervisor) Start() error {
 		s.logger.Error("failed to start process", err, nil)
 		return err
 	}
+
+	// Store pipes
+	s.stdin = stdin
+	s.stdout = stdout
 
 	s.process = cmd
 	s.pid = cmd.Process.Pid
@@ -274,6 +299,18 @@ func (s *supervisor) ResetRestartCounter() {
 	defer s.mu.Unlock()
 	s.restartTimes = make([]time.Time, 0)
 	s.restartCount = 0
+}
+
+func (s *supervisor) Stdin() io.WriteCloser {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.stdin
+}
+
+func (s *supervisor) Stdout() io.ReadCloser {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.stdout
 }
 
 func (s *supervisor) monitor(ctx context.Context) {
