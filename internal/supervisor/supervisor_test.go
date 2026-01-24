@@ -17,7 +17,7 @@ func TestSupervisor_StartProcessSuccessfully(t *testing.T) {
 	maxRestarts := 3
 	restartWindow := 60 * time.Second
 
-	sup := NewSupervisor(cmd, maxRestarts, restartWindow, log)
+	sup := NewSupervisor(cmd, "", maxRestarts, restartWindow, log)
 
 	err := sup.Start()
 	require.NoError(t, err)
@@ -41,7 +41,7 @@ func TestSupervisor_StartWithInvalidCommand(t *testing.T) {
 	maxRestarts := 3
 	restartWindow := 60 * time.Second
 
-	sup := NewSupervisor(cmd, maxRestarts, restartWindow, log)
+	sup := NewSupervisor(cmd, "", maxRestarts, restartWindow, log)
 
 	err := sup.Start()
 	assert.Error(t, err)
@@ -56,7 +56,7 @@ func TestSupervisor_StopRunningProcess(t *testing.T) {
 	maxRestarts := 3
 	restartWindow := 60 * time.Second
 
-	sup := NewSupervisor(cmd, maxRestarts, restartWindow, log)
+	sup := NewSupervisor(cmd, "", maxRestarts, restartWindow, log)
 
 	err := sup.Start()
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestSupervisor_RestartIncrementsCounter(t *testing.T) {
 	maxRestarts := 5
 	restartWindow := 60 * time.Second
 
-	sup := NewSupervisor(cmd, maxRestarts, restartWindow, log)
+	sup := NewSupervisor(cmd, "", maxRestarts, restartWindow, log)
 
 	err := sup.Start()
 	require.NoError(t, err)
@@ -121,7 +121,7 @@ func TestSupervisor_CrashLoopDetection(t *testing.T) {
 	maxRestarts := 2
 	restartWindow := 60 * time.Second
 
-	sup := NewSupervisor(cmd, maxRestarts, restartWindow, log)
+	sup := NewSupervisor(cmd, "", maxRestarts, restartWindow, log)
 
 	// Start will fail but supervisor should track it
 	_ = sup.Start()
@@ -143,7 +143,7 @@ func TestSupervisor_UptimeTracking(t *testing.T) {
 	maxRestarts := 3
 	restartWindow := 60 * time.Second
 
-	sup := NewSupervisor(cmd, maxRestarts, restartWindow, log)
+	sup := NewSupervisor(cmd, "", maxRestarts, restartWindow, log)
 
 	err := sup.Start()
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestSupervisor_ResetRestartCounter(t *testing.T) {
 	maxRestarts := 3
 	restartWindow := 60 * time.Second
 
-	sup := NewSupervisor(cmd, maxRestarts, restartWindow, log)
+	sup := NewSupervisor(cmd, "", maxRestarts, restartWindow, log)
 
 	_ = sup.Start()
 	time.Sleep(200 * time.Millisecond)
@@ -191,7 +191,7 @@ func TestSupervisor_LastError(t *testing.T) {
 
 	t.Run("no error when successful", func(t *testing.T) {
 		cmd := []string{"sleep", "1"}
-		sup := NewSupervisor(cmd, 3, 60*time.Second, log)
+		sup := NewSupervisor(cmd, "", 3, 60*time.Second, log)
 
 		err := sup.Start()
 		require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestSupervisor_LastError(t *testing.T) {
 
 	t.Run("captures error on failed start", func(t *testing.T) {
 		cmd := []string{"/nonexistent/command"}
-		sup := NewSupervisor(cmd, 3, 60*time.Second, log)
+		sup := NewSupervisor(cmd, "", 3, 60*time.Second, log)
 
 		err := sup.Start()
 		assert.Error(t, err)
@@ -216,7 +216,7 @@ func TestSupervisor_LastError(t *testing.T) {
 
 	t.Run("captures error on crash", func(t *testing.T) {
 		cmd := []string{"false"} // exits immediately with code 1
-		sup := NewSupervisor(cmd, 1, 60*time.Second, log)
+		sup := NewSupervisor(cmd, "", 1, 60*time.Second, log)
 
 		_ = sup.Start()
 		time.Sleep(200 * time.Millisecond)

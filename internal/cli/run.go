@@ -72,6 +72,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	sup := supervisor.NewSupervisor(
 		append([]string{merged.Command}, merged.Args...),
+		merged.CWD,
 		merged.Behavior.MaxRestarts,
 		time.Duration(merged.Behavior.RestartWindowSeconds)*time.Second,
 		log,

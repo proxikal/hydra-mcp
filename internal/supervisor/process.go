@@ -13,6 +13,7 @@ import (
 
 type supervisor struct {
 	cmd           []string
+	cwd           string
 	maxRestarts   int
 	restartWindow time.Duration
 	logger        logger.Logger
@@ -25,12 +26,14 @@ type supervisor struct {
 	restartCount  int
 	restartTimes  []time.Time
 	monitorCancel context.CancelFunc
+	monitorWait   sync.WaitGroup
 }
 
 // NewSupervisor creates a new supervisor for managing a child process
-func NewSupervisor(cmd []string, maxRestarts int, restartWindow time.Duration, log logger.Logger) Supervisor {
+func NewSupervisor(cmd []string, cwd string, maxRestarts int, restartWindow time.Duration, log logger.Logger) Supervisor {
 	return &supervisor{
 		cmd:           cmd,
+		cwd:           cwd,
 		maxRestarts:   maxRestarts,
 		restartWindow: restartWindow,
 		logger:        log,
@@ -58,6 +61,11 @@ func (s *supervisor) Start() error {
 
 	cmd := exec.Command(s.cmd[0], s.cmd[1:]...)
 
+	// Set working directory if specified
+	if s.cwd != "" {
+		cmd.Dir = s.cwd
+	}
+
 	// Set process group for tree kill support
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
@@ -81,6 +89,7 @@ func (s *supervisor) Start() error {
 	s.monitorCancel = cancel
 
 	// Monitor process in background
+	s.monitorWait.Add(1)
 	go s.monitor(ctx)
 
 	return nil
@@ -88,61 +97,106 @@ func (s *supervisor) Start() error {
 
 func (s *supervisor) Stop() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.state != StateRunning && s.state != StateRestarting {
+		s.mu.Unlock()
 		return nil
 	}
 
-	return s.stopProcess()
-}
+	// Get process reference while holding lock
+	proc := s.process
+	if proc == nil || proc.Process == nil {
+		s.state = StateStopped
+		s.pid = 0
+		s.mu.Unlock()
+		return nil
+	}
 
-func (s *supervisor) stopProcess() error {
-	// Cancel old monitor first to prevent race condition
+	// Signal process first
+	_ = proc.Process.Signal(syscall.SIGTERM)
+
+	// Release lock BEFORE waiting for monitor (to avoid deadlock)
+	s.mu.Unlock()
+
+	// Wait for monitor to finish (with timeout)
+	done := make(chan struct{})
+	go func() {
+		s.monitorWait.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Monitor finished
+	case <-time.After(5 * time.Second):
+		// Timeout - force kill
+		_ = proc.Process.Kill()
+		<-done
+	}
+
+	// Re-acquire lock to update state
+	s.mu.Lock()
 	if s.monitorCancel != nil {
 		s.monitorCancel()
 		s.monitorCancel = nil
 	}
-
-	if s.process == nil || s.process.Process == nil {
-		s.state = StateStopped
-		s.pid = 0
-		return nil
-	}
-
-	// Send SIGTERM
-	if err := s.process.Process.Signal(syscall.SIGTERM); err != nil {
-		// Process may have already exited
-		s.state = StateStopped
-		s.pid = 0
-		return nil
-	}
-
-	// Wait for graceful shutdown with timeout
-	done := make(chan error, 1)
-	go func() {
-		done <- s.process.Wait()
-	}()
-
-	select {
-	case <-time.After(5 * time.Second):
-		// Force kill if graceful shutdown failed
-		_ = s.process.Process.Kill()
-		<-done
-	case <-done:
-		// Process exited gracefully
-	}
-
 	s.state = StateStopped
 	s.pid = 0
 	s.process = nil
+	s.mu.Unlock()
 
 	return nil
 }
 
+// stopProcessLocked stops the process. MUST be called with lock held.
+// Returns the process reference for waiting, and releases the lock.
+// Caller must re-acquire lock after waiting and call cleanupAfterStop().
+func (s *supervisor) stopProcessLocked() *exec.Cmd {
+	proc := s.process
+	if proc == nil || proc.Process == nil {
+		s.state = StateStopped
+		s.pid = 0
+		return nil
+	}
+
+	// Signal process first
+	_ = proc.Process.Signal(syscall.SIGTERM)
+
+	return proc
+}
+
+// waitForMonitorUnlocked waits for monitor to finish. Must NOT hold lock.
+func (s *supervisor) waitForMonitorUnlocked(proc *exec.Cmd) {
+	done := make(chan struct{})
+	go func() {
+		s.monitorWait.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Monitor finished
+	case <-time.After(5 * time.Second):
+		// Timeout - force kill
+		if proc != nil && proc.Process != nil {
+			_ = proc.Process.Kill()
+		}
+		<-done
+	}
+}
+
+// cleanupAfterStop finalizes state after process stopped. MUST be called with lock held.
+func (s *supervisor) cleanupAfterStop() {
+	if s.monitorCancel != nil {
+		s.monitorCancel()
+		s.monitorCancel = nil
+	}
+	s.state = StateStopped
+	s.pid = 0
+	s.process = nil
+}
+
 func (s *supervisor) Restart() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// Check crash loop
 	now := time.Now()
@@ -162,20 +216,28 @@ func (s *supervisor) Restart() error {
 		s.state = StateFailed
 		s.lastError = fmt.Errorf("crash loop detected: %d restarts in %v", len(s.restartTimes), s.restartWindow)
 		s.logger.Error("crash loop detected", s.lastError, nil)
+		s.mu.Unlock()
 		return s.lastError
 	}
 
 	s.state = StateRestarting
 
-	// Stop current process
-	_ = s.stopProcess()
+	// Stop current process - get proc reference and release lock
+	proc := s.stopProcessLocked()
+	s.mu.Unlock()
+
+	// Wait for monitor without holding lock
+	if proc != nil {
+		s.waitForMonitorUnlocked(proc)
+	}
+
+	// Cleanup and start new process
+	s.mu.Lock()
+	s.cleanupAfterStop()
+	s.mu.Unlock()
 
 	// Start new process
-	s.mu.Unlock()
-	err := s.Start()
-	s.mu.Lock()
-
-	return err
+	return s.Start()
 }
 
 func (s *supervisor) State() ServerState {
@@ -215,29 +277,25 @@ func (s *supervisor) ResetRestartCounter() {
 }
 
 func (s *supervisor) monitor(ctx context.Context) {
-	if s.process == nil {
+	defer s.monitorWait.Done()
+
+	// Save process reference to avoid race
+	s.mu.RLock()
+	proc := s.process
+	s.mu.RUnlock()
+
+	if proc == nil {
 		return
 	}
 
 	// Wait for process to exit
-	done := make(chan error, 1)
-	go func() {
-		done <- s.process.Wait()
-	}()
+	// This is the ONLY place that calls Wait() on the process
+	err := proc.Wait()
 
-	var err error
+	// Check if we were cancelled
 	select {
 	case <-ctx.Done():
-		// Monitor cancelled (intentional stop/restart)
-		return
-	case err = <-done:
-		// Process exited
-	}
-
-	// Check context again before changing state
-	select {
-	case <-ctx.Done():
-		// Cancelled while waiting, don't update state
+		// Cancelled - don't update state
 		return
 	default:
 	}
