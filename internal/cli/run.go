@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/proxikal/hydra/internal/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/proxikal/hydra/internal/statestore"
 	"github.com/proxikal/hydra/internal/supervisor"
 	"github.com/proxikal/hydra/internal/transport"
+	"github.com/proxikal/hydra/internal/watcher"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -119,6 +121,84 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			CrashExportEnabled: merged.Recorder.ExportOnCrash,
 		},
 	)
+
+	// Setup file watcher for hot-reload if enabled
+	if merged.Watch.Enabled && len(merged.Watch.Paths) > 0 {
+		// Convert relative paths to absolute based on CWD
+		watchPaths := make([]string, 0, len(merged.Watch.Paths))
+		for _, path := range merged.Watch.Paths {
+			absPath := path
+			if !filepath.IsAbs(path) {
+				absPath = filepath.Join(merged.CWD, path)
+			}
+			watchPaths = append(watchPaths, absPath)
+		}
+
+		// Build ignore patterns
+		ignorePatterns := merged.Watch.Ignore
+
+		// Add ignore files patterns (like .gitignore entries)
+		// For now, we'll use the ignore list directly
+		// TODO: Parse .gitignore files if needed
+
+		// Create watcher with debounce
+		debounceMs := merged.Behavior.DebounceMS
+		if debounceMs == 0 {
+			debounceMs = 300 // Default 300ms
+		}
+		debounce := time.Duration(debounceMs) * time.Millisecond
+		batchWindow := time.Duration(500) * time.Millisecond // 500ms batch window
+
+		w, err := watcher.New(watchPaths, ignorePatterns, debounce, batchWindow, log)
+		if err != nil {
+			log.Error("failed to create file watcher, hot-reload disabled", err, nil)
+		} else {
+			if err := w.Start(); err != nil {
+				log.Error("failed to start file watcher, hot-reload disabled", err, nil)
+			} else {
+				log.Info("file watcher started", map[string]interface{}{
+					"paths":    watchPaths,
+					"debounce": debounce.String(),
+				})
+
+				// Start goroutine to handle file change events
+				go func() {
+					for event := range w.Events() {
+						// Check if file matches watched extensions
+						if len(merged.Watch.Extensions) > 0 {
+							ext := filepath.Ext(event.Path)
+							matched := false
+							for _, watchExt := range merged.Watch.Extensions {
+								if ext == watchExt {
+									matched = true
+									break
+								}
+							}
+							if !matched {
+								continue
+							}
+						}
+
+						log.Info("file change detected, restarting server", map[string]interface{}{
+							"path": event.Path,
+						})
+
+						// Trigger supervisor restart
+						if err := sup.Restart(); err != nil {
+							log.Error("failed to restart server after file change", err, nil)
+						}
+					}
+				}()
+
+				// Cleanup watcher on exit
+				defer func() {
+					if err := w.Stop(); err != nil {
+						log.Error("failed to stop file watcher", err, nil)
+					}
+				}()
+			}
+		}
+	}
 
 	return p.Run()
 }
