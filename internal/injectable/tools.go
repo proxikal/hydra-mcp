@@ -2,6 +2,7 @@ package injectable
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/proxikal/hydra/internal/logger"
@@ -61,9 +62,49 @@ type toolset struct {
 
 // Errors returned by injectable tools.
 var (
-	ErrDisabled    = errors.New("injectable tools disabled")
-	ErrUnknownTool = errors.New("unknown tool")
+	ErrDisabled            = errors.New("injectable tools disabled")
+	ErrUnknownTool         = errors.New("unknown tool")
+	ErrNamespaceCollision  = errors.New("namespace collision detected")
+	ErrInvalidToolName     = errors.New("tool name must start with hydra_")
 )
+
+// ValidateToolNames checks that all tool names follow the hydra_ convention.
+func ValidateToolNames(tools []string) error {
+	for _, name := range tools {
+		if len(name) < 6 || name[:6] != "hydra_" {
+			return fmt.Errorf("%w: %s", ErrInvalidToolName, name)
+		}
+	}
+	return nil
+}
+
+// DetectCollision checks if any child tools collide with Hydra tools.
+func DetectCollision(
+	hydraTools []ToolDefinition,
+	childTools []string,
+) ([]string, error) {
+	hydraNames := make(map[string]bool)
+	for _, tool := range hydraTools {
+		hydraNames[tool.Name] = true
+	}
+
+	var collisions []string
+	for _, childTool := range childTools {
+		if hydraNames[childTool] {
+			collisions = append(collisions, childTool)
+		}
+	}
+
+	if len(collisions) > 0 {
+		return collisions, fmt.Errorf(
+			"%w: %v",
+			ErrNamespaceCollision,
+			collisions,
+		)
+	}
+
+	return nil, nil
+}
 
 // New creates a new injectable tool set.
 func New(
@@ -130,68 +171,5 @@ func (t *toolset) Handle(
 		return t.handleForceRestart(params)
 	default:
 		return nil, ErrUnknownTool
-	}
-}
-
-func (t *toolset) definitionFor(
-	name string,
-) (ToolDefinition, bool) {
-	switch name {
-	case "hydra_restart":
-		return ToolDefinition{
-			Name:        "hydra_restart",
-			Description: "Manually restart the supervised MCP server.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"reason": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional reason for restart",
-					},
-				},
-			},
-		}, true
-	case "hydra_status":
-		return ToolDefinition{
-			Name:        "hydra_status",
-			Description: "Get current Hydra supervisor status.",
-			InputSchema: map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		}, true
-	case "hydra_logs":
-		return ToolDefinition{
-			Name:        "hydra_logs",
-			Description: "Retrieve recent child stderr logs.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"lines": map[string]interface{}{
-						"type":        "number",
-						"description": "Number of recent log lines to retrieve",
-						"minimum":     1,
-						"maximum":     500,
-					},
-				},
-			},
-		}, true
-	case "hydra_force_restart":
-		return ToolDefinition{
-			Name:        "hydra_force_restart",
-			Description: "Force restart even if in FAILED state.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"confirm": map[string]interface{}{
-						"type":        "boolean",
-						"description": "Must be true to confirm force restart",
-					},
-				},
-				"required": []string{"confirm"},
-			},
-		}, true
-	default:
-		return ToolDefinition{}, false
 	}
 }

@@ -5,7 +5,7 @@
 Hydra is a fault-tolerant **Supervisor & Proxy** for Model Context Protocol (MCP) servers. It is built specifically for **AI-Assisted Development**, ensuring that crashes, syntax errors, and "noisy" logs never break the connection between the AI Agent (Claude, Gemini, etc.) and the development server.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Status](https://img.shields.io/badge/status-pre--alpha-orange.svg)
+![Status](https://img.shields.io/badge/status-beta-blue.svg)
 ![Go Version](https://img.shields.io/badge/go-1.23+-cyan.svg)
 
 ---
@@ -52,31 +52,92 @@ graph LR
 ## 🚀 Getting Started
 
 ### Installation
-*Currently in Pre-Alpha. Installation instructions coming in Phase 4.*
 
-### Usage
+**From Source:**
+```bash
+git clone https://github.com/proxikal/hydra.git
+cd hydra
+go build -o bin/hydra cmd/hydra/main.go
+sudo mv bin/hydra /usr/local/bin/
+```
 
-**1. Global Configuration**
-Hydra uses a simple JSON config.
+**Or using Make:**
+```bash
+git clone https://github.com/proxikal/hydra.git
+cd hydra
+make install
+```
 
+**Verify Installation:**
+```bash
+hydra --version
+```
+
+> **Note:** Homebrew installation coming in v1.0 release
+
+### Quick Start
+
+**1. Initialize Hydra for Your AI Client**
+```bash
+hydra init --client claude
+# Follow prompts to select which MCP servers to supervise
+```
+
+This creates/updates your Claude Desktop config to route servers through Hydra.
+
+**2. Start a Supervised Server**
+```bash
+hydra run --name my-python-server
+```
+
+**3. Check Status**
+```bash
+hydra status my-python-server
+```
+
+**4. View Logs**
+```bash
+hydra logs my-python-server --follow
+```
+
+**5. Manual Restart (if needed)**
+```bash
+hydra restart my-python-server
+```
+
+### Configuration
+
+Hydra uses a two-tier config system:
+
+**Global Registry:** `~/.hydra/config.json`
 ```json
-// hydra.json
 {
-  "$schema": "https://hydra.mcp.dev/schema.json",
-  "command": "python",
-  "args": ["server.py"],
-  "env_file": ".env",
-  "watch": {
-    "paths": ["./src"],
-    "ignore_files": [".gitignore"]
+  "servers": {
+    "my-python-server": {
+      "command": "python",
+      "args": ["server.py"],
+      "env_file": ".env",
+      "watch": {
+        "paths": ["./src"],
+        "ignore_files": [".gitignore"]
+      },
+      "max_restarts": 5,
+      "restart_window_seconds": 60
+    }
   }
 }
 ```
 
-**2. Run**
-```bash
-hydra run
+**Local Override (Optional):** `./hydra.json`
+```json
+{
+  "watch": {
+    "paths": ["./src", "./lib"]
+  }
+}
 ```
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for full schema.
 
 ---
 
@@ -93,28 +154,62 @@ Hydra is designed with strict **"AI-Native"** principles:
 
 ---
 
-## 🗺️ Roadmap
+## 🗺️ Project Status
 
-We are executing a strict, phased implementation plan (see `/phases`):
+All implementation phases complete:
 
-- [ ] **Phase 1: Foundation** (Transport, Config, Sanitizer)
-- [ ] **Phase 2: Core Logic** (Supervisor, StateStore, Watcher)
-- [ ] **Phase 3: Orchestration** (Proxy, Tool Injection, Traffic Recorder)
-- [ ] **Phase 4: CLI** (Commands, Bootstrap)
-- [ ] **Phase 5: Hardening** (Chaos Testing, Benchmarks)
+- ✅ **Phase 1: Foundation** - Transport, Config, Sanitizer
+- ✅ **Phase 2: Core Logic** - Supervisor, StateStore, Watcher
+- ✅ **Phase 3: Orchestration** - Proxy, Tool Injection, Traffic Recorder
+- ✅ **Phase 4: CLI** - Commands, Bootstrap
+- ✅ **Phase 5: Hardening** - Chaos Testing, Benchmarks
+
+**Current Version:** Beta (approaching v1.0)
+
+### Roadmap to v1.0
+- [ ] Real-world testing with Claude Desktop
+- [ ] Performance validation on production workloads
+- [ ] Documentation polish
+- [ ] Bug fixes from beta feedback
 
 ---
 
 ## 🤝 Contributing
 
-Hydra follows strict development standards to ensure reliability and token efficiency.
-See [PRD.md](./PRD.md) and [docs/](./docs) for details.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-**Core Rules:**
-*   **No `fmt.Println`**: Use `internal/logger` (stderr only).
-*   **Interface-First**: All components must be testable via mocks.
-*   **Small Files**: < 200 lines per file.
+**Key Standards:**
+- No `fmt.Println` in production code (use `internal/logger`)
+- Interface-first pattern (all components)
+- Files < 200 lines
+- 80%+ test coverage
+- TDD mandatory
+
+**Development:**
+```bash
+git clone https://github.com/proxikal/hydra.git
+cd hydra
+make test        # Run tests
+make lint        # Lint code
+make coverage    # Check coverage
+```
 
 ---
 
-*Built with ❤️ for the MCP Community.*
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## 📚 Documentation
+
+- [Configuration Reference](docs/CONFIGURATION.md)
+- [CLI Reference](docs/CLI_REFERENCE.md)
+- [Architecture Details](docs/ARCHITECTURE.md)
+- [Security Model](docs/SECURITY.md)
+- [Testing Strategy](docs/testing/TESTING_STRATEGY.md)
+
+## 🙏 Acknowledgments
+
+Built with ❤️ for the MCP Community.
+
+Special thanks to all contributors who helped make Hydra production-ready.
