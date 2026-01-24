@@ -39,9 +39,9 @@ func newRunCommand() *cobra.Command {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
-	serverName := viper.GetString("name")
-	registryPath := viper.GetString("config")
-	overridePath := viper.GetString("override")
+	serverName, _ := cmd.Flags().GetString("name")
+	registryPath, _ := cmd.Flags().GetString("config")
+	overridePath, _ := cmd.Flags().GetString("override")
 
 	log := logger.New("info")
 	loader := config.NewLoader(log)
