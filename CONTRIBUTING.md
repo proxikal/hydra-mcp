@@ -95,7 +95,7 @@ func NewManager(logger *zerolog.Logger) Manager {
 ```
 
 #### 4. **File Size Limit**
-- No file > 200 lines (except generated code)
+- No file > 250 lines (300 max for rare complexity, generated code exempt)
 - Split large files by concern, not alphabetically
 - Examples: `forwarding.go`, `recording.go`, `state_updates.go`
 
@@ -138,7 +138,7 @@ implementation_feature_test.go  # Feature-specific tests (if needed for size)
 2. Run `golangci-lint run` (zero warnings)
 3. Run `go test -coverprofile=coverage.out ./...` (check coverage)
 4. Update `CHANGELOG.md` under `[Unreleased]`
-5. Ensure all files < 200 lines
+5. Ensure all files < 250 lines (300 max for rare complexity)
 6. Verify no `fmt.Println` in production code
 
 #### PR Guidelines

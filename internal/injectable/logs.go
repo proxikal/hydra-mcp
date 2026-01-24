@@ -20,7 +20,7 @@ type circularLogBuffer struct {
 // NewLogBuffer creates a bounded log buffer.
 func NewLogBuffer(max int) LogBuffer {
 	if max <= 0 {
-		max = 500
+		max = 50
 	}
 	return &circularLogBuffer{
 		lines: make([]string, 0, max),
@@ -67,7 +67,7 @@ func (t *toolset) handleLogs(
 		return nil, fmt.Errorf("log buffer not configured")
 	}
 
-	lines := 50
+	lines := 20
 	if val, ok := params["lines"].(float64); ok {
 		lines = int(val)
 	}

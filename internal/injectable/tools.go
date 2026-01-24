@@ -125,7 +125,7 @@ func New(
 	}
 
 	if opts.MaxLogLines <= 0 {
-		opts.MaxLogLines = 500
+		opts.MaxLogLines = 50
 	}
 
 	if buffer == nil {

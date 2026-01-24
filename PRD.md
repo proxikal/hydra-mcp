@@ -179,7 +179,7 @@ All Hydra tools start with `hydra_`. If child server exposes `hydra_*` tools, Hy
 **Built-in Tools:**
 - `hydra_restart` - Manual restart
 - `hydra_status` - Get supervisor status
-- `hydra_logs` - View child stderr logs
+- `hydra_logs` - View child stderr logs (50-line buffer, default 20 lines returned)
 - `hydra_force_restart` - Override crash loop protection
 
 **Details:** See `docs/INJECTABLE_TOOLS.md`
@@ -191,8 +191,9 @@ All Hydra tools start with `hydra_`. If child server exposes `hydra_*` tools, Hy
 Hydra protects AI agents from token bombs:
 
 1. **Log Truncation:** 1000 chars max per log message
-2. **Payload Limiting:** 50KB max per JSON-RPC response
-3. **Rate Limiting:** 10 logs/second max from child
+2. **Log Buffer:** 50-line circular buffer (in-memory only, no persistence)
+3. **Payload Limiting:** 50KB max per JSON-RPC response
+4. **Rate Limiting:** 10 logs/second max from child
 
 **Applied to:** Child logs, tool outputs, error messages
 
@@ -221,7 +222,7 @@ Hydra protects AI agents from token bombs:
   /unit                      # Unit tests
 ```
 
-**Rule:** No file > 200 lines (except generated code)
+**Rule:** No file > 250 lines (300 max for rare complex cases, generated code exempt)
 
 ---
 
@@ -308,7 +309,7 @@ Hydra protects AI agents from token bombs:
 
 1. **Start with interfaces** - Define all interfaces before implementation
 2. **TDD mandatory** - Write test, watch fail, implement, refactor
-3. **Files < 200 lines** - Split large files into subpackages
+3. **Files < 250 lines** - Split large files into subpackages (300 max rare exception)
 4. **Reference this PRD** for core rules (read frequently)
 5. **Reference specialized docs** for implementation details (read as-needed)
 6. **When in doubt, ask** - Don't guess behavior

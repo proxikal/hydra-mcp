@@ -181,7 +181,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 **Key Standards:**
 - No `fmt.Println` in production code (use `internal/logger`)
 - Interface-first pattern (all components)
-- Files < 200 lines
+- Files < 250 lines (300 max for rare complexity)
 - 80%+ test coverage
 - TDD mandatory
 

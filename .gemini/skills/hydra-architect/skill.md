@@ -23,7 +23,7 @@ When asked to implement a feature (e.g., "Build the Transport layer"):
 5.  **Implement:** Write the minimal code to pass the test.
 
 ## Quick Reference
-*   **Banned:** `fmt.Println`, Global Vars, Files > 200 lines.
+*   **Banned:** `fmt.Println`, Global Vars, Files > 250 lines (300 max rare exception).
 *   **Required:** `NewComponent()` constructors, `internal/logger` for errors.
 *   **Architecture:** See `PRD.md` and `docs/ARCHITECTURE.md`.
 

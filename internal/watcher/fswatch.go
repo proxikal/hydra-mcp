@@ -2,7 +2,8 @@ package watcher
 
 import (
 	"fmt"
-	"path/filepath"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -12,16 +13,18 @@ import (
 )
 
 type fsWatcher struct {
-	paths       []string
-	ignoreList  *ignore.GitIgnore
-	debounce    time.Duration
-	batchWindow time.Duration
-	logger      logger.Logger
-	watcher     *fsnotify.Watcher
-	events      chan WatchEvent
-	done        chan struct{}
-	lastEvent   time.Time
-	batchTimer  *time.Timer
+	paths        []string
+	ignoreList   *ignore.GitIgnore
+	debounce     time.Duration
+	batchWindow  time.Duration
+	logger       logger.Logger
+	watcher      *fsnotify.Watcher
+	events       chan WatchEvent
+	done         chan struct{}
+	mu           sync.Mutex // Protects pendingEvent and lastEvent
+	pendingEvent *WatchEvent
+	lastEvent    time.Time
+	batchTimer   *time.Timer
 }
 
 // New creates a new file system watcher with debouncing
@@ -53,9 +56,9 @@ func (w *fsWatcher) Start() error {
 
 	w.watcher = fsw
 
-	// Add paths
+	// Add paths recursively (including all subdirectories)
 	for _, path := range w.paths {
-		if err := w.watcher.Add(path); err != nil {
+		if err := w.addPathRecursive(path); err != nil {
 			_ = w.watcher.Close()
 			return fmt.Errorf("failed to watch path %s: %w", path, err)
 		}
@@ -83,8 +86,6 @@ func (w *fsWatcher) Events() <-chan WatchEvent {
 func (w *fsWatcher) run() {
 	defer close(w.events)
 
-	var pendingEvent *WatchEvent
-
 	for {
 		select {
 		case <-w.done:
@@ -100,11 +101,24 @@ func (w *fsWatcher) run() {
 				continue
 			}
 
+			// Handle directory creation - add new directories to watcher
+			if event.Op&fsnotify.Create == fsnotify.Create {
+				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+					if err := w.addPathRecursive(event.Name); err != nil {
+						w.logger.Error("failed to watch new directory", err, map[string]interface{}{
+							"path": event.Name,
+						})
+					}
+				}
+			}
+
 			now := time.Now()
 
+			w.mu.Lock()
+
 			// If no pending event, create one
-			if pendingEvent == nil {
-				pendingEvent = &WatchEvent{
+			if w.pendingEvent == nil {
+				w.pendingEvent = &WatchEvent{
 					Path:      event.Name,
 					Timestamp: now,
 				}
@@ -114,12 +128,16 @@ func (w *fsWatcher) run() {
 					w.batchTimer.Stop()
 				}
 				w.batchTimer = time.AfterFunc(w.debounce, func() {
-					w.flushEvent(pendingEvent)
-					pendingEvent = nil
+					w.mu.Lock()
+					pending := w.pendingEvent
+					w.pendingEvent = nil
+					w.mu.Unlock()
+					w.flushEvent(pending)
 				})
+				w.mu.Unlock()
 			} else {
 				// Update pending event timestamp
-				pendingEvent.Timestamp = now
+				w.pendingEvent.Timestamp = now
 
 				// Reset debounce timer
 				if w.batchTimer != nil {
@@ -129,14 +147,20 @@ func (w *fsWatcher) run() {
 				// Check if batch window expired
 				if now.Sub(w.lastEvent) > w.batchWindow {
 					// Flush immediately
-					w.flushEvent(pendingEvent)
-					pendingEvent = nil
+					pending := w.pendingEvent
+					w.pendingEvent = nil
+					w.mu.Unlock()
+					w.flushEvent(pending)
 				} else {
 					// Continue debouncing
 					w.batchTimer = time.AfterFunc(w.debounce, func() {
-						w.flushEvent(pendingEvent)
-						pendingEvent = nil
+						w.mu.Lock()
+						pending := w.pendingEvent
+						w.pendingEvent = nil
+						w.mu.Unlock()
+						w.flushEvent(pending)
 					})
+					w.mu.Unlock()
 				}
 			}
 
@@ -149,30 +173,14 @@ func (w *fsWatcher) run() {
 	}
 }
 
-func (w *fsWatcher) shouldIgnore(path string) bool {
-	if w.ignoreList == nil {
-		return false
-	}
-
-	// Get relative path for matching
-	for _, watchPath := range w.paths {
-		if rel, err := filepath.Rel(watchPath, path); err == nil {
-			if w.ignoreList.MatchesPath(rel) {
-				return true
-			}
-		}
-	}
-
-	// Also check basename
-	return w.ignoreList.MatchesPath(filepath.Base(path))
-}
-
 func (w *fsWatcher) flushEvent(event *WatchEvent) {
 	if event == nil {
 		return
 	}
 
+	w.mu.Lock()
 	w.lastEvent = time.Now()
+	w.mu.Unlock()
 
 	select {
 	case w.events <- *event:

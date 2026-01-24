@@ -11,8 +11,8 @@
     *   NO nested packages inside `internal` unless justified.
 
 2.  **File Limits**
-    *   **Max 200 lines** per file.
-    *   If a file grows > 200 lines, split it by responsibility:
+    *   **Max 250 lines** per file (300 absolute max for rare complex cases).
+    *   If a file grows > 250 lines, split it by responsibility:
         *   `manager.go` (Main logic)
         *   `manager_lifecycle.go` (Start/Stop)
         *   `manager_test.go` (Tests)

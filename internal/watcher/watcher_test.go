@@ -171,3 +171,69 @@ func TestWatcher_BatchWindowExpiration(t *testing.T) {
 		t.Fatal("timeout waiting for batched event")
 	}
 }
+
+func TestWatcher_RecursiveDirectories(t *testing.T) {
+	// Create temporary directory structure
+	tmpDir := t.TempDir()
+	subDir1 := filepath.Join(tmpDir, "level1")
+	subDir2 := filepath.Join(subDir1, "level2")
+	require.NoError(t, os.MkdirAll(subDir2, 0755))
+
+	log := logger.New("error")
+	w, err := New([]string{tmpDir}, []string{}, 50*time.Millisecond, 100*time.Millisecond, log)
+	require.NoError(t, err)
+
+	err = w.Start()
+	require.NoError(t, err)
+	defer func() { _ = w.Stop() }()
+
+	// Create file in deep subdirectory
+	testFile := filepath.Join(subDir2, "test.txt")
+	err = os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, err)
+
+	// Wait for event
+	select {
+	case event := <-w.Events():
+		assert.Contains(t, event.Path, "level2")
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout waiting for file change event in subdirectory")
+	}
+}
+
+func TestWatcher_DynamicDirectoryCreation(t *testing.T) {
+	// Create temporary directory
+	tmpDir := t.TempDir()
+
+	log := logger.New("error")
+	w, err := New([]string{tmpDir}, []string{}, 50*time.Millisecond, 100*time.Millisecond, log)
+	require.NoError(t, err)
+
+	err = w.Start()
+	require.NoError(t, err)
+	defer func() { _ = w.Stop() }()
+
+	// Create new subdirectory after watcher started
+	newDir := filepath.Join(tmpDir, "newdir")
+	require.NoError(t, os.Mkdir(newDir, 0755))
+
+	// Wait for directory creation event
+	select {
+	case <-w.Events():
+		// Got directory creation event
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timeout waiting for directory creation event")
+	}
+
+	// Create file in newly created directory
+	testFile := filepath.Join(newDir, "test.txt")
+	require.NoError(t, os.WriteFile(testFile, []byte("test"), 0644))
+
+	// Should receive event from file in dynamically created directory
+	select {
+	case event := <-w.Events():
+		assert.Contains(t, event.Path, "newdir")
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout waiting for file event in dynamically created directory")
+	}
+}

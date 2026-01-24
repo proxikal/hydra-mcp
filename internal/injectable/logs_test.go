@@ -43,28 +43,28 @@ func TestHandleLogsRedactsAndLimits(t *testing.T) {
 	assert.Equal(t, "[REDACTED]", logs[0])
 }
 
-func TestNewLogBufferDefaultsToFiveHundredWhenMaxIsZero(t *testing.T) {
+func TestNewLogBufferDefaultsToFiftyWhenMaxIsZero(t *testing.T) {
 	buffer := NewLogBuffer(0)
 	assert.NotNil(t, buffer)
 
-	for i := 0; i < 600; i++ {
+	for i := 0; i < 100; i++ {
 		buffer.Add("line")
 	}
 
-	logs := buffer.GetRecent(600)
-	assert.Len(t, logs, 500)
+	logs := buffer.GetRecent(100)
+	assert.Len(t, logs, 50)
 }
 
-func TestNewLogBufferDefaultsToFiveHundredWhenMaxIsNegative(t *testing.T) {
+func TestNewLogBufferDefaultsToFiftyWhenMaxIsNegative(t *testing.T) {
 	buffer := NewLogBuffer(-10)
 	assert.NotNil(t, buffer)
 
-	for i := 0; i < 600; i++ {
+	for i := 0; i < 100; i++ {
 		buffer.Add("line")
 	}
 
-	logs := buffer.GetRecent(600)
-	assert.Len(t, logs, 500)
+	logs := buffer.GetRecent(100)
+	assert.Len(t, logs, 50)
 }
 
 func TestHandleLogsFailsWhenBufferNil(t *testing.T) {
