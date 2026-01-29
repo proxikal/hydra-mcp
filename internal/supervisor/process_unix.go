@@ -1,4 +1,4 @@
-// +build windows
+// +build !windows
 
 package supervisor
 
@@ -7,9 +7,9 @@ import (
 	"syscall"
 )
 
-// setSysProcAttr sets Windows-specific process attributes
+// setSysProcAttr sets Unix-specific process attributes
 func setSysProcAttr(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		Setpgid: true,
 	}
 }

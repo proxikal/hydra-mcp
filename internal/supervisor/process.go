@@ -1,5 +1,3 @@
-// +build !windows
-
 package supervisor
 
 import (
@@ -72,10 +70,8 @@ func (s *supervisor) Start() error {
 		cmd.Dir = s.cwd
 	}
 
-	// Set process group for tree kill support
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-	}
+	// Set platform-specific process attributes
+	setSysProcAttr(cmd)
 
 	// Create pipes for stdin/stdout
 	stdin, err := cmd.StdinPipe()
