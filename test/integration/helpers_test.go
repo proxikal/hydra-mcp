@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"io"
 	"os/exec"
 	"path/filepath"
 	"sync"
