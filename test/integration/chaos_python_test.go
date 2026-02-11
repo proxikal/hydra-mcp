@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/proxikal/hydra/internal/config"
-	"github.com/proxikal/hydra/internal/logger"
 	"github.com/proxikal/hydra/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,7 +101,6 @@ func TestChaosPython_SlowInit(t *testing.T) {
 		t.Skip("Skipping chaos test in short mode")
 	}
 
-	tmpDir := t.TempDir()
 	pythonServer := getFixturePath("python_server.py")
 	require.FileExists(t, pythonServer)
 

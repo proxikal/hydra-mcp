@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/proxikal/hydra/internal/config"
-	"github.com/proxikal/hydra/internal/logger"
 	"github.com/proxikal/hydra/internal/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
