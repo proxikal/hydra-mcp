@@ -21,16 +21,17 @@ func New(dep Dependencies, opts Options) Proxy {
 	}
 
 	return &proxy{
-		state:      StateStopped,
-		queue:      NewQueue(opts.QueueSize, opts.QueueTTL),
-		logger:     dep.Logger,
-		sanitizer:  dep.Sanitizer,
-		supervisor: dep.Supervisor,
-		child:      dep.Child,
-		client:     dep.Client,
-		recorder:   dep.Recorder,
-		redactor:   dep.Redactor,
-		stateStore: dep.StateStore,
+		state:            StateStopped,
+		queue:            NewQueue(opts.QueueSize, opts.QueueTTL),
+		logger:           dep.Logger,
+		sanitizer:        dep.Sanitizer,
+		supervisor:       dep.Supervisor,
+		child:            dep.Child,
+		client:           dep.Client,
+		recorder:         dep.Recorder,
+		redactor:         dep.Redactor,
+		stateStore:       dep.StateStore,
+		metricsCollector: dep.MetricsCollector,
 		hydraTools: func() []injectable.ToolDefinition {
 			if len(opts.HydraTools) > 0 {
 				return opts.HydraTools

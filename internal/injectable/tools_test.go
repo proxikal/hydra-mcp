@@ -39,6 +39,7 @@ func TestDefinitionsIncludeHydraTools(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),
@@ -58,6 +59,7 @@ func TestHandleUnknownToolReturnsError(t *testing.T) {
 		Options{Enabled: true},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		logger.New("info"),
 		NewLogBuffer(10),
@@ -78,6 +80,7 @@ func TestHandleReturnsErrDisabledWhenToolsDisabled(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		logger.New("info"),
 		NewLogBuffer(10),
@@ -105,6 +108,7 @@ func TestGetDefinitionsFiltersUnknownTools(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),

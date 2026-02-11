@@ -24,6 +24,7 @@ func TestHandleRestartTriggersSupervisorRestart(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),
@@ -59,6 +60,7 @@ func TestHandleForceRestartRequiresConfirmation(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),

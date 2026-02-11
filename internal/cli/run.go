@@ -2,12 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/proxikal/hydra/internal/config"
 	"github.com/proxikal/hydra/internal/logger"
+	"github.com/proxikal/hydra/internal/metrics"
 	"github.com/proxikal/hydra/internal/proxy"
 	"github.com/proxikal/hydra/internal/recorder"
 	"github.com/proxikal/hydra/internal/sanitizer"
@@ -36,6 +38,9 @@ func newRunCommand() *cobra.Command {
 
 	cmd.Flags().String("override", "./hydra.json", "Local override path")
 	_ = viper.BindPFlag("override", cmd.Flags().Lookup("override"))
+
+	cmd.Flags().Int("metrics-port", 0, "Port to serve Prometheus metrics (0 = disabled)")
+	_ = viper.BindPFlag("metrics-port", cmd.Flags().Lookup("metrics-port"))
 
 	return cmd
 }
@@ -98,6 +103,31 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	san := sanitizer.New()
 
+	// Create metrics collector
+	collector := metrics.NewCollector()
+
+	// Start Prometheus metrics server if port specified
+	metricsPort := viper.GetInt("metrics-port")
+	if metricsPort > 0 {
+		exporter := metrics.NewPrometheusExporter(collector)
+		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+			output := exporter.Export(serverName)
+			fmt.Fprint(w, output)
+		})
+
+		go func() {
+			addr := fmt.Sprintf(":%d", metricsPort)
+			log.Info("metrics server starting", map[string]interface{}{
+				"port": metricsPort,
+				"path": "/metrics",
+			})
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				log.Error("metrics server failed", err, nil)
+			}
+		}()
+	}
+
 	// Use supervisor's pipes for child transport
 	childTransport := transport.NewStdio(sup.Stdout(), sup.Stdin(), log)
 	clientTransport := transport.NewStdio(os.Stdin, os.Stdout, log)
@@ -110,6 +140,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			StateStore:          store,
 			Recorder:            rec,
 			Redactor:            redactor,
+			MetricsCollector:    collector,
 			MaxRestartsInWindow: func() int { return merged.Behavior.MaxRestarts },
 			MaxRestarts:         func() int { return merged.Behavior.MaxRestarts },
 			Child:               childTransport,

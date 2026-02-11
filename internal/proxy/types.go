@@ -5,6 +5,7 @@ import (
 
 	"github.com/proxikal/hydra/internal/injectable"
 	"github.com/proxikal/hydra/internal/logger"
+	"github.com/proxikal/hydra/internal/metrics"
 	"github.com/proxikal/hydra/internal/recorder"
 	"github.com/proxikal/hydra/internal/sanitizer"
 	"github.com/proxikal/hydra/internal/security"
@@ -63,6 +64,7 @@ type Dependencies struct {
 	Recorder            recorder.Recorder
 	Redactor            security.Redactor
 	StateStore          statestore.StateStore
+	MetricsCollector    metrics.MetricsCollector
 	HydraTools          []injectable.ToolDefinition
 	MaxRestartsInWindow func() int
 	MaxRestarts         func() int
@@ -79,6 +81,7 @@ type proxy struct {
 	recorder           recorder.Recorder
 	redactor           security.Redactor
 	stateStore         statestore.StateStore
+	metricsCollector   metrics.MetricsCollector
 	hydraTools         []injectable.ToolDefinition
 	collisionPolicy    string
 	crashExportPath    string

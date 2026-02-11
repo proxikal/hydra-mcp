@@ -27,6 +27,7 @@ func TestHandleLogsRedactsAndLimits(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		buffer,

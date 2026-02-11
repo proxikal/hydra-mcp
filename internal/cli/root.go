@@ -23,6 +23,8 @@ func NewRoot() *cobra.Command {
 		newRestartCommand(),
 		newRecoverCommand(),
 		newExportCommand(),
+		newPsCommand(),
+		newInspectCommand(),
 	)
 
 	return root

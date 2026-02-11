@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/proxikal/hydra/internal/logger"
+	"github.com/proxikal/hydra/internal/metrics"
 	"github.com/proxikal/hydra/internal/security"
 	"github.com/proxikal/hydra/internal/supervisor"
 )
@@ -55,6 +56,7 @@ type toolset struct {
 	opts       Options
 	supervisor supervisor.Supervisor
 	status     func() StatusSnapshot
+	metrics    metrics.MetricsCollector
 	redactor   security.Redactor
 	logger     logger.Logger
 	buffer     LogBuffer
@@ -111,6 +113,7 @@ func New(
 	opts Options,
 	sup supervisor.Supervisor,
 	status func() StatusSnapshot,
+	metricsCollector metrics.MetricsCollector,
 	redactor security.Redactor,
 	log logger.Logger,
 	buffer LogBuffer,
@@ -136,6 +139,7 @@ func New(
 		opts:       opts,
 		supervisor: sup,
 		status:     status,
+		metrics:    metricsCollector,
 		redactor:   redactor,
 		logger:     log,
 		buffer:     buffer,
@@ -169,6 +173,8 @@ func (t *toolset) Handle(
 		return t.handleLogs(params)
 	case "hydra_force_restart":
 		return t.handleForceRestart(params)
+	case "hydra_metrics":
+		return t.handleMetrics()
 	default:
 		return nil, ErrUnknownTool
 	}

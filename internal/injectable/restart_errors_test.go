@@ -20,6 +20,7 @@ func TestHandleRestartFailsWhenSupervisorNil(t *testing.T) {
 		},
 		nil,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),
@@ -45,6 +46,7 @@ func TestHandleRestartFailsWhenInFailedState(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),
@@ -72,6 +74,7 @@ func TestHandleRestartFailsWhenSupervisorReturnsError(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),
@@ -95,6 +98,7 @@ func TestHandleForceRestartFailsWhenSupervisorNil(t *testing.T) {
 		},
 		nil,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),
@@ -123,6 +127,7 @@ func TestHandleForceRestartFailsWhenRestartFails(t *testing.T) {
 		},
 		sup,
 		status,
+		nil, // metrics collector
 		stubRedactor{},
 		stubLogger{},
 		NewLogBuffer(100),

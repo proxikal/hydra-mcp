@@ -43,6 +43,15 @@ func (t *toolset) definitionFor(
 				},
 			},
 		}, true
+	case "hydra_metrics":
+		return ToolDefinition{
+			Name:        "hydra_metrics",
+			Description: "Get comprehensive Hydra proxy metrics including health score, request stats, and latency percentiles.",
+			InputSchema: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		}, true
 	case "hydra_force_restart":
 		return ToolDefinition{
 			Name:        "hydra_force_restart",
