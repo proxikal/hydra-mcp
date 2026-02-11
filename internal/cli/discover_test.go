@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -12,14 +13,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// getClaudeConfigPath returns the platform-specific Claude config path
+func getClaudeConfigPath(home string) string {
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(home, "Library/Application Support/Claude/claude_desktop_config.json")
+	case "windows":
+		return filepath.Join(home, "AppData/Roaming/Claude/claude_desktop_config.json")
+	default: // linux
+		return filepath.Join(home, ".config/Claude/claude_desktop_config.json")
+	}
+}
+
 func TestDiscoverCommand_MultipleClients(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := os.Getenv("HOME")
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", oldHome)
 
-	// Create Claude config
-	claudePath := filepath.Join(tmpDir, "Library/Application Support/Claude/claude_desktop_config.json")
+	// Create Claude config (platform-specific path)
+	claudePath := getClaudeConfigPath(tmpDir)
 	require.NoError(t, os.MkdirAll(filepath.Dir(claudePath), 0755))
 	claudeConfig := map[string]interface{}{
 		"mcpServers": map[string]interface{}{
@@ -86,7 +99,7 @@ func TestDiscoverCommand_LowConfidence(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	// Create invalid JSON config (confidence = 0.5)
-	claudePath := filepath.Join(tmpDir, "Library/Application Support/Claude/claude_desktop_config.json")
+	claudePath := getClaudeConfigPath(tmpDir)
 	require.NoError(t, os.MkdirAll(filepath.Dir(claudePath), 0755))
 	require.NoError(t, os.WriteFile(claudePath, []byte("invalid json"), 0644))
 
@@ -111,8 +124,8 @@ func TestDiscoverCommand_TableFormatting(t *testing.T) {
 	os.Setenv("HOME", tmpDir)
 	defer os.Setenv("HOME", oldHome)
 
-	// Create config
-	claudePath := filepath.Join(tmpDir, "Library/Application Support/Claude/claude_desktop_config.json")
+	// Create config (platform-specific path)
+	claudePath := getClaudeConfigPath(tmpDir)
 	require.NoError(t, os.MkdirAll(filepath.Dir(claudePath), 0755))
 	claudeConfig := map[string]interface{}{
 		"mcpServers": map[string]interface{}{
