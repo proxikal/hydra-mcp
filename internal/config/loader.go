@@ -39,6 +39,11 @@ func NewLoader(l logger.Logger) Loader {
 }
 
 func (l *fileLoader) LoadRegistry(path string) (*Registry, error) {
+	// Handle empty path
+	if path == "" {
+		return nil, fmt.Errorf("registry path cannot be empty")
+	}
+
 	// Expand home directory
 	if path[0] == '~' {
 		home, err := os.UserHomeDir()

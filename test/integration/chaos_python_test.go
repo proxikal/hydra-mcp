@@ -40,7 +40,7 @@ func TestChaosPython_CrashRecovery(t *testing.T) {
 	// Start Hydra with chaos server
 	cmd := exec.Command("hydra", "run",
 		"--name", serverName,
-		"--registry", registryPath,
+		"--config", registryPath,
 	)
 
 	// Redirect output for debugging
@@ -51,6 +51,7 @@ func TestChaosPython_CrashRecovery(t *testing.T) {
 
 	cmd.Stdout = logF
 	cmd.Stderr = logF
+	cmd.Env = append(os.Environ(), "HOME="+tmpDir)
 
 	require.NoError(t, cmd.Start())
 	defer func() {

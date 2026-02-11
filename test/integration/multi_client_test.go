@@ -60,7 +60,7 @@ func TestMultiServer_StateIsolation(t *testing.T) {
 	for _, name := range []string{"server1", "server2", "server3"} {
 		cmd := exec.Command("hydra", "run",
 			"--name", name,
-			"--registry", registryPath,
+			"--config", registryPath,
 		)
 
 		logFile := filepath.Join(tmpDir, name+".log")
@@ -70,6 +70,7 @@ func TestMultiServer_StateIsolation(t *testing.T) {
 
 		cmd.Stdout = logF
 		cmd.Stderr = logF
+		cmd.Env = append(os.Environ(), "HOME="+tmpDir)
 
 		require.NoError(t, cmd.Start())
 		cmds = append(cmds, cmd)
@@ -88,6 +89,15 @@ func TestMultiServer_StateIsolation(t *testing.T) {
 	// Wait for all to initialize
 	time.Sleep(6 * time.Second)
 
+	// Check if processes are still running
+	for i, cmd := range cmds {
+		if cmd.ProcessState != nil {
+			t.Logf("server%d exited with: %v", i+1, cmd.ProcessState)
+		} else {
+			t.Logf("server%d still running (PID: %d)", i+1, cmd.Process.Pid)
+		}
+	}
+
 	// Verify separate state files exist
 	stateMgr := state.NewManager(stateDir)
 
@@ -99,8 +109,38 @@ func TestMultiServer_StateIsolation(t *testing.T) {
 		}
 	}
 
+	// Print log files to debug
+	for _, name := range []string{"server1", "server2", "server3"} {
+		logPath := filepath.Join(tmpDir, name+".log")
+		if data, err := os.ReadFile(logPath); err == nil {
+			t.Logf("%s log:\n%s", name, string(data))
+		}
+	}
+
 	// Verify state isolation (no mixing)
 	stateFiles, _ := filepath.Glob(filepath.Join(stateDir, "*.json"))
+	t.Logf("State directory: %s", stateDir)
+	t.Logf("Found %d state files: %v", len(stateFiles), stateFiles)
+
+	// Also check if tmpDir/.hydra exists
+	hydraDir := filepath.Join(tmpDir, ".hydra")
+	if info, err := os.Stat(hydraDir); err == nil {
+		t.Logf(".hydra exists: %v (isDir: %v)", hydraDir, info.IsDir())
+		entries, _ := os.ReadDir(hydraDir)
+		for _, e := range entries {
+			t.Logf("  - %s (isDir: %v)", e.Name(), e.IsDir())
+			// If it's the state directory, list its contents too
+			if e.Name() == "state" && e.IsDir() {
+				stateEntries, _ := os.ReadDir(filepath.Join(hydraDir, "state"))
+				for _, se := range stateEntries {
+					t.Logf("    * %s", se.Name())
+				}
+			}
+		}
+	} else {
+		t.Logf(".hydra does not exist: %v", err)
+	}
+
 	assert.GreaterOrEqual(t, len(stateFiles), 3, "Should have separate state files")
 }
 
@@ -140,7 +180,7 @@ func TestMultiServer_ConcurrentMetrics(t *testing.T) {
 	for _, name := range []string{"metrics1", "metrics2"} {
 		cmd := exec.Command("hydra", "run",
 			"--name", name,
-			"--registry", registryPath,
+			"--config", registryPath,
 		)
 
 		logFile := filepath.Join(tmpDir, name+".log")
@@ -150,6 +190,7 @@ func TestMultiServer_ConcurrentMetrics(t *testing.T) {
 
 		cmd.Stdout = logF
 		cmd.Stderr = logF
+		cmd.Env = append(os.Environ(), "HOME="+tmpDir)
 
 		require.NoError(t, cmd.Start())
 		cmds = append(cmds, cmd)
@@ -213,7 +254,7 @@ func TestHydraPS_Accuracy(t *testing.T) {
 	for _, name := range []string{"ps-test-1", "ps-test-2"} {
 		cmd := exec.Command("hydra", "run",
 			"--name", name,
-			"--registry", registryPath,
+			"--config", registryPath,
 		)
 
 		logFile := filepath.Join(tmpDir, name+".log")
@@ -223,6 +264,7 @@ func TestHydraPS_Accuracy(t *testing.T) {
 
 		cmd.Stdout = logF
 		cmd.Stderr = logF
+		cmd.Env = append(os.Environ(), "HOME="+tmpDir)
 
 		require.NoError(t, cmd.Start())
 		cmds = append(cmds, cmd)
@@ -242,7 +284,11 @@ func TestHydraPS_Accuracy(t *testing.T) {
 
 	// Run hydra ps
 	psCmd := exec.Command("hydra", "ps")
+	psCmd.Env = append(os.Environ(), "HOME="+tmpDir)
 	output, err := psCmd.CombinedOutput()
+	if err != nil {
+		t.Logf("PS Error: %v\nOutput: %s", err, string(output))
+	}
 	require.NoError(t, err)
 
 	psOutput := string(output)
@@ -263,6 +309,7 @@ func TestHydraPS_Accuracy(t *testing.T) {
 
 	// Run ps again
 	psCmd2 := exec.Command("hydra", "ps")
+	psCmd2.Env = append(os.Environ(), "HOME="+tmpDir)
 	output2, err := psCmd2.CombinedOutput()
 	require.NoError(t, err)
 

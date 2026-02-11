@@ -15,6 +15,7 @@ import (
 	"github.com/proxikal/hydra/internal/recorder"
 	"github.com/proxikal/hydra/internal/sanitizer"
 	"github.com/proxikal/hydra/internal/security"
+	"github.com/proxikal/hydra/internal/state"
 	"github.com/proxikal/hydra/internal/statestore"
 	"github.com/proxikal/hydra/internal/supervisor"
 	"github.com/proxikal/hydra/internal/transport"
@@ -47,9 +48,9 @@ func newRunCommand() *cobra.Command {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
-	serverName := viper.GetString("name")
-	registryPath := viper.GetString("config")
-	overridePath := viper.GetString("override")
+	serverName, _ := cmd.Flags().GetString("name")
+	registryPath, _ := cmd.Flags().GetString("config")
+	overridePath, _ := cmd.Flags().GetString("override")
 
 	log := logger.New("info")
 	loader := config.NewLoader(log)
@@ -235,6 +236,41 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+
+	// Setup state persistence
+	stateDir := filepath.Join(os.Getenv("HOME"), ".hydra", "state")
+	stateMgr := state.NewManager(stateDir)
+
+	log.Info("state persistence initialized", map[string]interface{}{
+		"state_dir": stateDir,
+		"server":    serverName,
+		"pid":       os.Getpid(),
+	})
+
+	// Save initial state
+	if err := stateMgr.SaveState(serverName, os.Getpid(), collector); err != nil {
+		log.Error("failed to save initial state", err, map[string]interface{}{
+			"state_dir": stateDir,
+		})
+	} else {
+		log.Info("initial state saved", map[string]interface{}{
+			"state_file": filepath.Join(stateDir, serverName+".json"),
+		})
+	}
+
+	// Periodically save state (every 5 seconds)
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := stateMgr.SaveState(serverName, os.Getpid(), collector); err != nil {
+				log.Error("failed to save state", err, nil)
+			}
+		}
+	}()
+
+	// Note: State files persist after exit and are cleaned up by hydra ps (CleanupStale)
+	// This allows monitoring of recently stopped instances
 
 	return p.Run()
 }
