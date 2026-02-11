@@ -59,8 +59,27 @@ jobs:
           flags: unittests
           name: codecov-${{ matrix.os }}
 
+      - name: Build hydra binary for integration tests
+        run: |
+          go build -o hydra cmd/hydra/main.go
+          chmod +x hydra
+
+      - name: Install hydra to PATH
+        run: |
+          mkdir -p $HOME/bin
+          cp hydra $HOME/bin/
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Verify hydra binary is accessible
+        run: |
+          export PATH="$HOME/bin:$PATH"
+          which hydra
+          hydra --help || echo "Help command not available, binary exists"
+
       - name: Run integration tests
-        run: go test -race -v ./test/integration/...
+        run: |
+          export PATH="$HOME/bin:$PATH"
+          go test -race -v ./test/integration/...
 
       - name: Run benchmark tests (validation only)
         run: go test -bench=. -benchtime=1x ./test/benchmarks/...
