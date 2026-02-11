@@ -64,6 +64,14 @@ jobs:
           go build -o hydra cmd/hydra/main.go
           chmod +x hydra
 
+      - name: Build test fixtures
+        run: |
+          cd test/fixtures/mcp_servers
+          go build -o go_server go_server.go
+          chmod +x go_server
+          chmod +x python_server.py
+          chmod +x node_server.js
+
       - name: Install hydra to PATH
         run: |
           mkdir -p $HOME/bin
