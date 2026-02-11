@@ -53,7 +53,7 @@ func TestChaosNode_CrashRecovery(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	defer func() {
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 
