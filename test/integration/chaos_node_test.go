@@ -77,8 +77,8 @@ func TestChaosNode_CrashRecovery(t *testing.T) {
 	assert.Greater(t, successCount, 40, "Should handle most requests")
 
 	// Cleanup
-	cmd.Process.Kill()
-	cmd.Wait()
+	_ = cmd.Process.Kill()
+	_ = cmd.Wait()
 }
 
 func TestChaosNode_SlowInit(t *testing.T) {

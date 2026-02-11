@@ -21,7 +21,7 @@ func TestConfigureCline(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(cfg)
-	os.WriteFile(configPath, data, 0644)
+	_ = os.WriteFile(configPath, data, 0644)
 
 	err := ConfigureCline(configPath, registryPath, false, log)
 	assert.NoError(t, err)

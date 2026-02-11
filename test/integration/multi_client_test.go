@@ -254,8 +254,8 @@ func TestHydraPS_Accuracy(t *testing.T) {
 
 	// Stop one server
 	if cmds[0].Process != nil {
-		cmds[0].Process.Kill()
-		cmds[0].Wait()
+		_ = cmds[0].Process.Kill()
+		_ = cmds[0].Wait()
 	}
 
 	// Wait for cleanup

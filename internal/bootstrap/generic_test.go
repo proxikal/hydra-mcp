@@ -203,7 +203,7 @@ func TestConfigureGenericMCP_PreservesExistingRegistryEntries(t *testing.T) {
 	existing := config.DefaultServerConfig()
 	existing.Command = "existing"
 	reg.Servers["existing-server"] = existing
-	config.SaveRegistry(reg, registryPath)
+	_ = config.SaveRegistry(reg, registryPath)
 
 	// Create client config
 	cfg := map[string]interface{}{

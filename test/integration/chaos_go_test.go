@@ -53,7 +53,7 @@ func TestChaosGo_CrashRecovery(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	defer func() {
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 
@@ -77,8 +77,8 @@ func TestChaosGo_CrashRecovery(t *testing.T) {
 	assert.Greater(t, successCount, 40, "Should handle most requests")
 
 	// Cleanup
-	cmd.Process.Kill()
-	cmd.Wait()
+	_ = cmd.Process.Kill()
+	_ = cmd.Wait()
 }
 
 func TestChaosGo_SlowInit(t *testing.T) {
@@ -98,8 +98,8 @@ func TestChaosGo_SlowInit(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	defer func() {
 		stdin.Close()
-		cmd.Process.Kill()
-		cmd.Wait()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
 	}()
 
 	// Wait for init

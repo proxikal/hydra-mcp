@@ -173,13 +173,13 @@ func TestChaosPython_HighLatency(t *testing.T) {
 		data, _ := json.Marshal(request)
 
 		start := time.Now()
-		stdin.Write(append(data, '\n'))
+		_, _ = stdin.Write(append(data, '\n'))
 
 		// Wait for response (with timeout)
 		done := make(chan bool, 1)
 		go func() {
 			var response map[string]interface{}
-			scanner.Decode(&response)
+			_ = scanner.Decode(&response)
 			done <- true
 		}()
 

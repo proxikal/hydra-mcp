@@ -47,7 +47,7 @@ func TestConfigureClaude_DefaultPath(t *testing.T) {
 	// Create empty registry
 	reg := &config.Registry{Servers: make(map[string]*config.ServerConfig)}
 	data, _ := json.Marshal(reg)
-	os.WriteFile(registryPath, data, 0644)
+	_ = os.WriteFile(registryPath, data, 0644)
 
 	log := logger.New("error")
 
