@@ -48,9 +48,35 @@ func newRunCommand() *cobra.Command {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
-	serverName, _ := cmd.Flags().GetString("name")
-	registryPath, _ := cmd.Flags().GetString("config")
-	overridePath, _ := cmd.Flags().GetString("override")
+	// Get values - prefer explicitly set values over defaults
+	// In CLI: flags are parsed and available via viper
+	// In tests: viper.Set() is used to mock values
+	var serverName, registryPath, overridePath string
+
+	// For serverName: required flag, so must be set
+	if cmd.Flags().Changed("name") {
+		serverName, _ = cmd.Flags().GetString("name")
+	} else {
+		serverName = viper.GetString("name")
+	}
+
+	// For config: check if flag was explicitly set, otherwise use viper
+	if cmd.Flags().Changed("config") {
+		registryPath, _ = cmd.Flags().GetString("config")
+	} else if viper.IsSet("config") {
+		registryPath = viper.GetString("config")
+	} else {
+		registryPath, _ = cmd.Flags().GetString("config") // use default
+	}
+
+	// For override: same logic
+	if cmd.Flags().Changed("override") {
+		overridePath, _ = cmd.Flags().GetString("override")
+	} else if viper.IsSet("override") {
+		overridePath = viper.GetString("override")
+	} else {
+		overridePath, _ = cmd.Flags().GetString("override") // use default
+	}
 
 	log := logger.New("info")
 	loader := config.NewLoader(log)
