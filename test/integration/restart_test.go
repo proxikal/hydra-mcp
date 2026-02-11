@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"io"
-
 	"github.com/proxikal/hydra/internal/logger"
 	"github.com/proxikal/hydra/internal/mocks"
 	"github.com/proxikal/hydra/internal/proxy"
@@ -16,47 +14,6 @@ import (
 	"github.com/proxikal/hydra/internal/transport"
 	"github.com/stretchr/testify/assert"
 )
-
-type channelTransport struct {
-	in     chan []byte
-	out    chan []byte
-	closed chan struct{}
-	mu     sync.Mutex
-	writes [][]byte
-}
-
-func newChannelTransport() *channelTransport {
-	return &channelTransport{
-		in:     make(chan []byte, 4),
-		out:    make(chan []byte, 4),
-		closed: make(chan struct{}),
-	}
-}
-
-func (t *channelTransport) Read() ([]byte, error) {
-	select {
-	case msg := <-t.in:
-		return msg, nil
-	case <-t.closed:
-		return nil, io.EOF
-	}
-}
-
-func (t *channelTransport) Write(p []byte) error {
-	t.mu.Lock()
-	t.writes = append(t.writes, append([]byte{}, p...))
-	t.mu.Unlock()
-	return nil
-}
-
-func (t *channelTransport) Close() error {
-	close(t.closed)
-	return nil
-}
-
-func (t *channelTransport) DetectProtocol(_ time.Duration) (transport.Protocol, error) {
-	return transport.ProtocolNDJSON, nil
-}
 
 // End-to-end smoke test: proxy between client channel and echo server process.
 func TestProxyEchoIntegration(t *testing.T) {
