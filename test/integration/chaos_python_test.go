@@ -55,7 +55,7 @@ func TestChaosPython_CrashRecovery(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	defer func() {
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 
@@ -92,8 +92,8 @@ func TestChaosPython_CrashRecovery(t *testing.T) {
 	}
 
 	// Cleanup
-	cmd.Process.Kill()
-	cmd.Wait()
+	_ = cmd.Process.Kill()
+	_ = cmd.Wait()
 }
 
 func TestChaosPython_SlowInit(t *testing.T) {
@@ -114,8 +114,8 @@ func TestChaosPython_SlowInit(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	defer func() {
 		stdin.Close()
-		cmd.Process.Kill()
-		cmd.Wait()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
 	}()
 
 	// Wait for ready (2 second init delay expected)
@@ -153,8 +153,8 @@ func TestChaosPython_HighLatency(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	defer func() {
 		stdin.Close()
-		cmd.Process.Kill()
-		cmd.Wait()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
 	}()
 
 	// Wait for init

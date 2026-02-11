@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 // Request represents a JSON-RPC request
 type Request struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -30,7 +32,7 @@ func handleRequest(req Request) {
 	requestCount++
 
 	// Chaos behaviors
-	chaosRoll := rand.Float64()
+	chaosRoll := rng.Float64()
 
 	// 1% chance: Immediate crash
 	if chaosRoll < 0.01 {
@@ -46,7 +48,7 @@ func handleRequest(req Request) {
 
 	// 5% chance: Slow response (2-5 seconds)
 	if chaosRoll < 0.09 {
-		delay := time.Duration(2000+rand.Intn(3000)) * time.Millisecond
+		delay := time.Duration(2000+rng.Intn(3000)) * time.Millisecond
 		fmt.Fprintf(os.Stderr, "[CHAOS] Request %d: SLOW (%.1fs)\n", requestCount, delay.Seconds())
 		time.Sleep(delay)
 	}
@@ -76,9 +78,6 @@ func sendResponse(req Request) {
 }
 
 func main() {
-	// Seed random
-	rand.Seed(time.Now().UnixNano())
-
 	// Simulate slow initialization (2 seconds)
 	fmt.Fprintln(os.Stderr, "[CHAOS] Initializing (2s)...")
 	time.Sleep(2 * time.Second)

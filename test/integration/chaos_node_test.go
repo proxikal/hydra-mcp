@@ -98,8 +98,8 @@ func TestChaosNode_SlowInit(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	defer func() {
 		stdin.Close()
-		cmd.Process.Kill()
-		cmd.Wait()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
 	}()
 
 	// Wait for init

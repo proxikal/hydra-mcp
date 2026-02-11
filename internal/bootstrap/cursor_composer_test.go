@@ -21,7 +21,7 @@ func TestConfigureCursorComposer(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(cfg)
-	os.WriteFile(configPath, data, 0644)
+	_ = os.WriteFile(configPath, data, 0644)
 
 	err := ConfigureCursorComposer(configPath, registryPath, false, log)
 	assert.NoError(t, err)
