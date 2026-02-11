@@ -238,7 +238,7 @@ func TestConfigureGenericMCP_ExpandsHomePath(t *testing.T) {
 	// Create empty registry
 	reg := &config.Registry{Servers: make(map[string]*config.ServerConfig)}
 	data, _ := json.Marshal(reg)
-	os.WriteFile(registryPath, data, 0644)
+	_ = os.WriteFile(registryPath, data, 0644)
 
 	// Use ~ in config path
 	configPath := filepath.Join(tmpDir, "config.json")
@@ -253,7 +253,7 @@ func TestConfigureGenericMCP_ExpandsHomePath(t *testing.T) {
 		},
 	}
 	cfgData, _ := json.Marshal(cfg)
-	os.WriteFile(configPath, cfgData, 0644)
+	_ = os.WriteFile(configPath, cfgData, 0644)
 
 	log := logger.New("error")
 

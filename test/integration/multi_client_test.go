@@ -79,8 +79,8 @@ func TestMultiServer_StateIsolation(t *testing.T) {
 	defer func() {
 		for _, cmd := range cmds {
 			if cmd.Process != nil {
-				cmd.Process.Kill()
-				cmd.Wait()
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
 			}
 		}
 	}()
@@ -158,8 +158,8 @@ func TestMultiServer_ConcurrentMetrics(t *testing.T) {
 	defer func() {
 		for _, cmd := range cmds {
 			if cmd.Process != nil {
-				cmd.Process.Kill()
-				cmd.Wait()
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
 			}
 		}
 	}()
@@ -231,8 +231,8 @@ func TestHydraPS_Accuracy(t *testing.T) {
 	defer func() {
 		for _, cmd := range cmds {
 			if cmd.Process != nil {
-				cmd.Process.Kill()
-				cmd.Wait()
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
 			}
 		}
 	}()
