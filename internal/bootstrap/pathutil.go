@@ -20,8 +20,8 @@ func expandHome(path string) string {
 	return filepath.Join(home, path[1:])
 }
 
-// detectClientConfigPath returns the configuration file path for a given client.
-func detectClientConfigPath(client string) (string, error) {
+// DetectClientConfigPath returns the configuration file path for a given client.
+func DetectClientConfigPath(client string) (string, error) {
 	var path string
 
 	switch client {

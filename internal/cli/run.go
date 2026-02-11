@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/proxikal/hydra/internal/adaptive"
 	"github.com/proxikal/hydra/internal/config"
 	"github.com/proxikal/hydra/internal/logger"
 	"github.com/proxikal/hydra/internal/metrics"
@@ -106,6 +107,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// Create metrics collector
 	collector := metrics.NewCollector()
 
+	// Create adaptive learner
+	learner := adaptive.NewLearner()
+
 	// Start Prometheus metrics server if port specified
 	metricsPort := viper.GetInt("metrics-port")
 	if metricsPort > 0 {
@@ -141,6 +145,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			Recorder:            rec,
 			Redactor:            redactor,
 			MetricsCollector:    collector,
+			AdaptiveLearner:     learner,
 			MaxRestartsInWindow: func() int { return merged.Behavior.MaxRestarts },
 			MaxRestarts:         func() int { return merged.Behavior.MaxRestarts },
 			Child:               childTransport,

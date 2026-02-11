@@ -3,6 +3,7 @@ package proxy
 import (
 	"time"
 
+	"github.com/proxikal/hydra/internal/adaptive"
 	"github.com/proxikal/hydra/internal/injectable"
 	"github.com/proxikal/hydra/internal/logger"
 	"github.com/proxikal/hydra/internal/metrics"
@@ -65,6 +66,7 @@ type Dependencies struct {
 	Redactor            security.Redactor
 	StateStore          statestore.StateStore
 	MetricsCollector    metrics.MetricsCollector
+	AdaptiveLearner     *adaptive.Learner
 	HydraTools          []injectable.ToolDefinition
 	MaxRestartsInWindow func() int
 	MaxRestarts         func() int
@@ -82,6 +84,7 @@ type proxy struct {
 	redactor           security.Redactor
 	stateStore         statestore.StateStore
 	metricsCollector   metrics.MetricsCollector
+	learner            *adaptive.Learner
 	hydraTools         []injectable.ToolDefinition
 	collisionPolicy    string
 	crashExportPath    string

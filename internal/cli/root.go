@@ -12,6 +12,7 @@ func NewRoot() *cobra.Command {
 	root.AddCommand(
 		newRunCommand(),
 		newInitCommand(),
+		newDiscoverCommand(),
 		newUninitCommand(),
 		newAddCommand(),
 		newListCommand(),
@@ -25,6 +26,7 @@ func NewRoot() *cobra.Command {
 		newExportCommand(),
 		newPsCommand(),
 		newInspectCommand(),
+		newTuneCommand(),
 	)
 
 	return root

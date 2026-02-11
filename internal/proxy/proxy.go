@@ -32,6 +32,7 @@ func New(dep Dependencies, opts Options) Proxy {
 		redactor:         dep.Redactor,
 		stateStore:       dep.StateStore,
 		metricsCollector: dep.MetricsCollector,
+		learner:          dep.AdaptiveLearner,
 		hydraTools: func() []injectable.ToolDefinition {
 			if len(opts.HydraTools) > 0 {
 				return opts.HydraTools

@@ -71,7 +71,7 @@ func TestDetectClientConfigPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.client, func(t *testing.T) {
-			path, err := detectClientConfigPath(tt.client)
+			path, err := DetectClientConfigPath(tt.client)
 			if tt.shouldExist {
 				assert.NoError(t, err, "Should detect path for %s", tt.client)
 				assert.NotEmpty(t, path, "Path should not be empty for %s", tt.client)
