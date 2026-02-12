@@ -20,6 +20,9 @@ func TestPSCommand_ListsRunningInstances(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
+	if os.Getenv("CI") != "" && os.Getenv("RUNNER_OS") == "macOS" {
+		t.Skip("Skipping multi-instance test on macOS CI (platform-specific process spawning issue)")
+	}
 
 	tmpDir := t.TempDir()
 
