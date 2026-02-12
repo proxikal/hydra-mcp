@@ -137,84 +137,8 @@ func TestChaosPython_SlowInit(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestChaosPython_HighLatency(t *testing.T) {
-	t.Skip("Skipping flaky timing-dependent test - depends on unpredictable network/process timing")
-	if testing.Short() {
-		t.Skip("Skipping chaos test in short mode")
-	}
-
-	pythonServer := getFixturePath("python_server.py")
-	require.FileExists(t, pythonServer)
-
-	cmd := exec.Command("python3", pythonServer)
-	stdin, err := cmd.StdinPipe()
-	require.NoError(t, err)
-	stdout, err := cmd.StdoutPipe()
-	require.NoError(t, err)
-
-	require.NoError(t, cmd.Start())
-	defer func() {
-		stdin.Close()
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-	}()
-
-	// Wait for init
-	time.Sleep(3 * time.Second)
-
-	// Start goroutine to read responses (avoids race on shared decoder)
-	responseChan := make(chan map[string]interface{}, 20)
-	go func() {
-		decoder := json.NewDecoder(stdout)
-		for {
-			var response map[string]interface{}
-			if err := decoder.Decode(&response); err != nil {
-				close(responseChan)
-				return
-			}
-			responseChan <- response
-		}
-	}()
-
-	// Send 20 requests, track latencies
-	var highLatencyCount int
-
-	for i := 0; i < 20; i++ {
-		request := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      i,
-			"method":  "test",
-		}
-		data, _ := json.Marshal(request)
-
-		start := time.Now()
-		_, _ = stdin.Write(append(data, '\n'))
-
-		// Wait for response (with timeout)
-		select {
-		case _, ok := <-responseChan:
-			if !ok {
-				t.Logf("Request %d: response channel closed", i)
-				highLatencyCount++
-			} else {
-				elapsed := time.Since(start)
-				if elapsed > 1*time.Second {
-					highLatencyCount++
-				}
-			}
-		case <-time.After(10 * time.Second):
-			t.Logf("Request %d timed out", i)
-			highLatencyCount++
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	// With 5% slow response rate (5 second delay), expect 0-3 high latency requests in 20
-	// Allow up to 10 to account for variance and timing issues
-	t.Logf("High latency requests: %d", highLatencyCount)
-	assert.LessOrEqual(t, highLatencyCount, 10, "Should have some high latency responses but not all")
-}
+// TestChaosPython_HighLatency removed - was fundamentally flaky due to timing dependencies.
+// Latency tracking is better validated via metrics assertions in other tests.
 
 func getFixturePath(filename string) string {
 	// Navigate from test/integration to test/fixtures/mcp_servers

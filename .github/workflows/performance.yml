@@ -1,0 +1,99 @@
+name: Performance Regression Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  regression:
+    name: Performance Regression
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+
+      - name: Run regression tests
+        run: |
+          go test github.com/proxikal/hydra/test/benchmarks \
+            -run TestRegression \
+            -v \
+            -timeout 10m
+
+      - name: Fail on regression
+        if: failure()
+        run: |
+          echo "❌ PERFORMANCE REGRESSION DETECTED"
+          echo "One or more performance targets were not met."
+          echo "See test output above for details."
+          exit 1
+
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+
+      - name: Run benchmarks
+        run: |
+          go test github.com/proxikal/hydra/test/benchmarks \
+            -bench=. \
+            -benchmem \
+            -run=^$ \
+            -timeout 10m \
+            | tee benchmark-results.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: benchmark-results.txt
+
+  memory-leak:
+    name: Memory Leak Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+
+      - name: Run memory leak tests
+        run: |
+          go test github.com/proxikal/hydra/test/benchmarks \
+            -run TestMemoryLeak \
+            -v \
+            -timeout 15m

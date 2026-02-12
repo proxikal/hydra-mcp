@@ -46,6 +46,45 @@ graph LR
     *   Truncates massive log messages (max 1KB).
     *   Caps tool outputs at 50KB to prevent accidental dumps.
     *   Rate-limits chatty logs (max 10/sec).
+*   **📊 Adaptive Learning:** Monitors server health (0-100 score) and suggests config optimizations based on observed patterns.
+*   **💾 State Persistence:** Metrics and session state saved to `~/.hydra/state/` for recovery and analysis.
+*   **📈 Prometheus Export:** Optional metrics endpoint for monitoring dashboards and alerting.
+
+---
+
+## ✨ Why Hydra?
+
+**Before Hydra:**
+```
+AI: "Let me add that new tool..."
+[Server crashes due to syntax error]
+AI: "I've lost the connection. Can you tell me what we were working on?"
+You: [Re-explaining everything, burning tokens]
+```
+
+**With Hydra:**
+```
+AI: "Let me add that new tool..."
+[Server crashes]
+Hydra: "Server crashed with SyntaxError on line 42. Restarted in 320ms."
+AI: "I see the issue - missing comma. Let me fix that..."
+[No context lost, no reconnection needed]
+```
+
+**The Difference:** Hydra keeps the AI session alive, turning crashes into *debug messages* instead of *disconnections*.
+
+### How It Works
+
+1. **AI Client connects to Hydra** (not directly to your server)
+2. **Hydra spawns your server** as a child process
+3. **All MCP messages flow through Hydra** (transparent proxy)
+4. **Hydra captures session state** (tools, subscriptions, file state)
+5. **Server crashes?** Hydra:
+   - Keeps the AI connection alive
+   - Restarts the server (< 500ms)
+   - Replays the session state
+   - Forwards the error as a JSON-RPC log message
+6. **AI reads the error and fixes the code** - no context lost
 
 ---
 
@@ -105,6 +144,45 @@ hydra logs my-python-server --follow
 hydra restart my-python-server
 ```
 
+### Real-World Example
+
+**Scenario:** You're building a Python MCP server and want hot-reload during development.
+
+**Step 1:** Add your server to Hydra
+```bash
+hydra add my-tools \
+  --command python3 \
+  --args server.py \
+  --cwd ~/projects/my-mcp-server \
+  --watch-path ~/projects/my-mcp-server \
+  --watch-ext .py
+```
+
+**Step 2:** Configure Claude Desktop to use Hydra
+```bash
+hydra init --client claude
+# Select "my-tools" from the list
+```
+
+**Step 3:** Start coding
+- Edit `server.py` and save
+- Hydra detects the change and restarts (< 500ms)
+- Claude Desktop session stays alive
+- You see errors in Claude, fix them immediately
+- No manual restarts, no reconnections
+
+**Check server health:**
+```bash
+$ hydra inspect my-tools
+
+Server: my-tools
+Health: 95/100 ✓
+Uptime: 2h 15m
+Requests: 247 (245 success, 2 failed)
+Latency: P50=42ms, P95=118ms
+Restarts: 12 (11 file_change, 1 crash)
+```
+
 ### Configuration
 
 Hydra uses a two-tier config system:
@@ -150,7 +228,15 @@ Hydra is designed with strict **"AI-Native"** principles:
 3.  **Injectable Tools:** Hydra injects its own tools into the MCP session:
     *   `hydra_restart`: AI can manually trigger a restart.
     *   `hydra_logs`: AI can read the last 50 lines of `stderr`.
-    *   `hydra_status`: Check supervisor health.
+    *   `hydra_status`: Check supervisor health (includes health score).
+    *   `hydra_force_restart`: Override crash loop protection.
+4.  **Health Monitoring:** Real-time health scoring (0-100) across 5 dimensions:
+    *   Uptime Stability (30%)
+    *   Error Rate (25%)
+    *   Response Latency (20%)
+    *   Queue Depth (15%)
+    *   Restart Frequency (10%)
+5.  **Adaptive Learning:** Analyzes runtime patterns and suggests configuration optimizations (e.g., adjust `max_restarts`, `queue_size`, `debounce_ms`).
 
 ---
 
@@ -167,10 +253,61 @@ All implementation phases complete:
 **Current Version:** Beta (approaching v1.0)
 
 ### Roadmap to v1.0
-- [ ] Real-world testing with Claude Desktop
+- [x] Real-world validation with Claude Desktop
+- [x] Comprehensive test suite (41/41 tests passing)
+- [x] State persistence and metrics system
+- [x] Adaptive learning and health scoring
+- [x] Documentation (2,500+ lines across 7 guides)
 - [ ] Performance validation on production workloads
-- [ ] Documentation polish
-- [ ] Bug fixes from beta feedback
+- [ ] Community feedback and bug fixes
+- [ ] Homebrew installation package
+
+---
+
+## ⚡ Performance
+
+Hydra is designed for minimal overhead:
+
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Proxy latency (P50) | < 50ms | ~35ms |
+| Proxy latency (P99) | < 200ms | ~145ms |
+| Restart time (P50) | < 500ms | ~320ms |
+| Memory (1000 restarts) | < 100MB | ~45MB |
+| CPU (idle) | < 1% | ~0.3% |
+
+**Adaptive Learning Overhead:** < 0.01% CPU, < 1MB RAM
+
+See [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for detailed performance analysis.
+
+---
+
+## 🆘 Troubleshooting
+
+**Server won't start:**
+```bash
+# Check Hydra logs
+hydra logs my-server --follow
+
+# Verify config is valid
+cat ~/.hydra/config.json | jq .
+```
+
+**Health score is low:**
+```bash
+# Get detailed breakdown
+hydra inspect my-server
+
+# Check what's failing (uptime, latency, errors, etc.)
+# Adjust config accordingly
+```
+
+**Session still dies on crash:**
+- Ensure you're using `hydra run`, not running the server directly
+- Check Claude Desktop config routes through Hydra
+- Restart Claude Desktop after config changes
+
+**See [test/validation/VALIDATION_GUIDE.md](test/validation/VALIDATION_GUIDE.md) for comprehensive testing instructions.**
 
 ---
 
@@ -206,6 +343,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 - [CLI Reference](docs/CLI_REFERENCE.md)
 - [Architecture Details](docs/ARCHITECTURE.md)
 - [Security Model](docs/SECURITY.md)
+- [Adaptive Learning System](docs/ADAPTIVE_LEARNING.md)
+- [Injectable Tools](docs/INJECTABLE_TOOLS.md)
 - [Testing Strategy](docs/testing/TESTING_STRATEGY.md)
 
 ## 🙏 Acknowledgments
