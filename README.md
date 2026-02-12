@@ -37,15 +37,13 @@ graph LR
 *   **🛡️ Session Persistence:** The AI session survives server crashes. Hydra reports the error as a JSON-RPC message, allowing the AI to read the stack trace and fix the code *without* disconnecting.
 *   **🔇 Stdio Sanitization:** Hydra filters `stdout`. If your server prints `console.log("Debug")` or panics with a raw stack trace, Hydra captures it, wraps it in a log message, and prevents it from corrupting the JSON-RPC pipe.
 *   **⚡ Optimistic Hot-Reload:** Restarts the server instantly (< 500ms) on file save. No "pre-flight" checks; the crash *is* the feedback.
-*   **🧠 Context Resurrection:** When the server restarts, Hydra automatically replays:
-    *   `initialize` request
-    *   `textDocument/didOpen` & `didChange` (File State)
-    *   `resources/subscribe` (Log subscriptions)
-    *   `logging/setLevel`
+*   **🧠 Session State Tracking:** When the server restarts, Hydra preserves and can replay:
+    *   `initialize` request (automatic)
+    *   `resources/subscribe` requests (subscriptions tracked)
 *   **💰 Wallet Guard:** Protects against token bombs.
-    *   Truncates massive log messages (max 1KB).
     *   Caps tool outputs at 50KB to prevent accidental dumps.
-    *   Rate-limits chatty logs (max 10/sec).
+    *   Rate-limits log messages (max 10/sec).
+    *   Configurable size limits and redaction patterns.
 *   **📊 Adaptive Learning:** Monitors server health (0-100 score) and suggests config optimizations based on observed patterns.
 *   **💾 State Persistence:** Metrics and session state saved to `~/.hydra/state/` for recovery and analysis.
 *   **📈 Prometheus Export:** Optional metrics endpoint for monitoring dashboards and alerting.
@@ -254,10 +252,10 @@ All implementation phases complete:
 
 ### Roadmap to v1.0
 - [x] Real-world validation with Claude Desktop
-- [x] Comprehensive test suite (41/41 tests passing)
+- [x] Comprehensive test suite (35 integration tests, 325+ total)
 - [x] State persistence and metrics system
 - [x] Adaptive learning and health scoring
-- [x] Documentation (2,500+ lines across 7 guides)
+- [x] Documentation (6,200+ lines across 11 guides)
 - [ ] Performance validation on production workloads
 - [ ] Community feedback and bug fixes
 - [ ] Homebrew installation package
@@ -270,13 +268,13 @@ Hydra is designed for minimal overhead:
 
 | Metric | Target | Actual |
 |--------|--------|--------|
-| Proxy latency (P50) | < 50ms | ~35ms |
-| Proxy latency (P99) | < 200ms | ~145ms |
-| Restart time (P50) | < 500ms | ~320ms |
-| Memory (1000 restarts) | < 100MB | ~45MB |
-| CPU (idle) | < 1% | ~0.3% |
+| Proxy latency (P50) | < 50ms | 0.053ms |
+| Proxy latency (P99) | < 200ms | 0.141ms |
+| Restart time (P50) | < 500ms | 101ms |
+| Memory (1000 restarts) | < 100MB | No leak (GC stable) |
+| CPU (idle) | < 1% | < 0.5% |
 
-**Adaptive Learning Overhead:** < 0.01% CPU, < 1MB RAM
+**Adaptive Learning Overhead:** Negligible (< 1MB RAM)
 
 See [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) for detailed performance analysis.
 
