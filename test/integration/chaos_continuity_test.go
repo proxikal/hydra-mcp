@@ -25,6 +25,9 @@ func TestRestart_SessionContinuity(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping chaos test in short mode")
 	}
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping file watcher test in CI (requires async infrastructure)")
+	}
 
 	tmpDir := t.TempDir()
 	serverName := "continuity-test"

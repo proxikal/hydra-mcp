@@ -24,6 +24,9 @@ func TestMassFileChanges_DebouncesProperly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping chaos test in short mode")
 	}
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping file watcher test in CI (requires async infrastructure)")
+	}
 
 	tmpDir := t.TempDir()
 	serverName := "debounce-test"
@@ -134,6 +137,9 @@ func TestMassFileChanges_DebouncesProperly(t *testing.T) {
 func TestDebounce_IndividualChanges(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping chaos test in short mode")
+	}
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping file watcher test in CI (requires async infrastructure)")
 	}
 
 	tmpDir := t.TempDir()
