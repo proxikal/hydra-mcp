@@ -102,6 +102,9 @@ func TestStateStore_CapturesRequests(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping chaos test in short mode")
 	}
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping StateStore test in CI (requires async request/response infrastructure)")
+	}
 
 	tmpDir := t.TempDir()
 	serverName := "statestore-test"
